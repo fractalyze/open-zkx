@@ -1,0 +1,281 @@
+# Copyright 2025 The ZKX Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
+load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library")
+load("//bazel:zkx_cc.bzl", "zkx_cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+gentbl_cc_library(
+    name = "passes_inc_gen",
+    tbl_outs = {
+        "passes.h.inc": [
+            "-gen-pass-decls",
+            "-name=Transforms",
+        ],
+    },
+    tblgen = "@llvm-project//mlir:mlir-tblgen",
+    td_file = "passes.td",
+    visibility = ["//visibility:private"],
+    deps = ["@llvm-project//mlir:PassBaseTdFiles"],
+)
+
+zkx_cc_library(
+    name = "atomic_rmw_utils",
+    srcs = ["atomic_rmw_utils.cc"],
+    hdrs = ["atomic_rmw_utils.h"],
+    deps = [
+        "//zkx/codegen/emitters/ir:zkx",
+        "@com_google_absl//absl/log:check",
+        "@llvm-project//llvm:Support",
+        "@llvm-project//mlir:ArithDialect",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:LLVMDialect",
+    ],
+)
+
+zkx_cc_library(
+    name = "convert_pure_call_ops",
+    srcs = ["convert_pure_call_ops.cc"],
+    deps = [
+        ":passes_inc_gen",
+        "//zkx/codegen/emitters/ir:zkx",
+        "@llvm-project//mlir:FuncDialect",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:Pass",
+        "@llvm-project//mlir:Support",
+        "@llvm-project//mlir:TransformUtils",
+    ],
+)
+
+zkx_cc_library(
+    name = "erase_dead_functions",
+    srcs = ["erase_dead_functions.cc"],
+    deps = [
+        ":passes_inc_gen",
+        "@llvm-project//llvm:Support",
+        "@llvm-project//mlir:CallOpInterfaces",
+        "@llvm-project//mlir:FuncDialect",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:Pass",
+        "@llvm-project//mlir:Support",
+    ],
+)
+
+zkx_cc_library(
+    name = "flatten_tensors",
+    srcs = ["flatten_tensors.cc"],
+    deps = [
+        ":passes_inc_gen",
+        "//zkx:shape_util",
+        "//zkx:zkx_data_cc_proto",
+        "//zkx/backends/gpu/codegen/emitters/ir:zkx_gpu",
+        "//zkx/codegen/emitters/ir:zkx",
+        "//zkx/hlo/analysis:indexing_analysis",
+        "@llvm-project//llvm:Support",
+        "@llvm-project//mlir:ArithDialect",
+        "@llvm-project//mlir:FuncDialect",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:Pass",
+        "@llvm-project//mlir:SCFDialect",
+        "@llvm-project//mlir:Support",
+        "@llvm-project//mlir:TensorDialect",
+        "@llvm-project//mlir:TransformUtils",
+        "@llvm-project//mlir:VectorDialect",
+    ],
+)
+
+zkx_cc_library(
+    name = "lower_tensors",
+    srcs = ["lower_tensors.cc"],
+    deps = [
+        ":atomic_rmw_utils",
+        ":passes_inc_gen",
+        "//zkx:util",
+        "//zkx/backends/gpu/codegen/emitters/ir:zkx_gpu",
+        "//zkx/codegen:device_spec",
+        "//zkx/mlir:mlir_utils",
+        "//zkx/stream_executor:device_description",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+        "@com_google_protobuf//:protobuf",
+        "@llvm-project//llvm:Support",
+        "@llvm-project//mlir:ArithDialect",
+        "@llvm-project//mlir:DataLayoutInterfaces",
+        "@llvm-project//mlir:FuncDialect",
+        "@llvm-project//mlir:GPUDialect",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:LLVMCommonConversion",
+        "@llvm-project//mlir:LLVMDialect",
+        "@llvm-project//mlir:Pass",
+        "@llvm-project//mlir:SCFDialect",
+        "@llvm-project//mlir:Support",
+        "@llvm-project//mlir:TensorDialect",
+        "@llvm-project//mlir:TransformUtils",
+        "@llvm-project//mlir:VectorDialect",
+        "@llvm-project//mlir:VectorTransforms",
+    ],
+)
+
+zkx_cc_library(
+    name = "lower_to_llvm",
+    srcs = ["lower_to_llvm.cc"],
+    deps = [
+        ":passes_inc_gen",
+        "//zkx/codegen:device_spec",
+        "//zkx/mlir:mlir_utils",
+        "@com_google_absl//absl/strings",
+        "@com_google_protobuf//:protobuf",
+        "@llvm-project//mlir:AMDGPUUtils",
+        "@llvm-project//mlir:ArithDialect",
+        "@llvm-project//mlir:ArithToLLVM",
+        "@llvm-project//mlir:ArithTransforms",
+        "@llvm-project//mlir:ControlFlowToLLVM",
+        "@llvm-project//mlir:DataLayoutInterfaces",
+        "@llvm-project//mlir:FuncDialect",
+        "@llvm-project//mlir:GPUToNVVMTransforms",
+        "@llvm-project//mlir:GPUToROCDLTransforms",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:LLVMCommonConversion",
+        "@llvm-project//mlir:MathDialect",
+        "@llvm-project//mlir:MathToLLVM",
+        "@llvm-project//mlir:NVVMDialect",
+        "@llvm-project//mlir:Pass",
+        "@llvm-project//mlir:ROCDLDialect",
+        "@llvm-project//mlir:Transforms",
+        "@llvm-project//mlir:VectorToLLVM",
+    ],
+)
+
+zkx_cc_library(
+    name = "lower_zkx_to_scf",
+    srcs = ["lower_zkx_to_scf.cc"],
+    deps = [
+        ":passes_inc_gen",
+        "//zkx/backends/gpu/codegen/emitters/ir:zkx_gpu",
+        "//zkx/codegen/emitters:elemental_hlo_to_mlir",
+        "@llvm-project//llvm:Support",
+        "@llvm-project//mlir:ArithDialect",
+        "@llvm-project//mlir:DataLayoutInterfaces",
+        "@llvm-project//mlir:FuncDialect",
+        "@llvm-project//mlir:GPUDialect",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:LLVMDialect",
+        "@llvm-project//mlir:Pass",
+        "@llvm-project//mlir:SCFDialect",
+        "@llvm-project//mlir:TensorDialect",
+        "@llvm-project//mlir:VectorDialect",
+        "@prime_ir//prime_ir/Dialect/Field/IR:Field",
+    ],
+)
+
+zkx_cc_library(
+    name = "merge_pointers_to_same_slice",
+    srcs = ["merge_pointers_to_same_slice.cc"],
+    deps = [
+        ":passes_inc_gen",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@llvm-project//llvm:Support",
+        "@llvm-project//mlir:FuncDialect",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:LLVMDialect",
+        "@llvm-project//mlir:Pass",
+        "@llvm-project//mlir:Support",
+    ],
+)
+
+zkx_cc_library(
+    name = "passes",
+    hdrs = ["passes.h"],
+    deps = [
+        ":convert_pure_call_ops",
+        ":erase_dead_functions",
+        ":flatten_tensors",
+        ":lower_tensors",
+        ":lower_to_llvm",
+        ":lower_zkx_to_scf",
+        ":merge_pointers_to_same_slice",
+        ":propagate_slice_indices",
+        ":simplify_affine",
+        ":simplify_arith",
+        ":unswitch_loops",
+        "//zkx/stream_executor:device_description",
+        "@llvm-project//mlir:Pass",
+        "@llvm-project//mlir:Support",
+    ],
+)
+
+zkx_cc_library(
+    name = "propagate_slice_indices",
+    srcs = ["propagate_slice_indices.cc"],
+    deps = [
+        ":passes_inc_gen",
+        "@llvm-project//mlir:FuncDialect",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:Pass",
+        "@llvm-project//mlir:Support",
+    ],
+)
+
+zkx_cc_library(
+    name = "simplify_affine",
+    srcs = ["simplify_affine.cc"],
+    deps = [
+        ":passes_inc_gen",
+        "//zkx/codegen/emitters/ir:zkx",
+        "//zkx/hlo/analysis:indexing_map",
+        "@com_google_absl//absl/base:core_headers",
+        "@llvm-project//llvm:Support",
+        "@llvm-project//mlir:AffineDialect",
+        "@llvm-project//mlir:AffineUtils",
+        "@llvm-project//mlir:ArithDialect",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:Pass",
+        "@llvm-project//mlir:SCFDialect",
+        "@llvm-project//mlir:Support",
+        "@llvm-project//mlir:TransformUtils",
+    ],
+)
+
+zkx_cc_library(
+    name = "simplify_arith",
+    srcs = ["simplify_arith.cc"],
+    deps = [
+        ":passes_inc_gen",
+        "//zkx/codegen/emitters/ir:zkx",
+        "@llvm-project//mlir:ArithDialect",
+        "@llvm-project//mlir:FuncDialect",
+        "@llvm-project//mlir:GPUDialect",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:Pass",
+    ],
+)
+
+zkx_cc_library(
+    name = "unswitch_loops",
+    srcs = ["unswitch_loops.cc"],
+    deps = [
+        ":passes_inc_gen",
+        "@llvm-project//mlir:ArithDialect",
+        "@llvm-project//mlir:FuncDialect",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:Pass",
+        "@llvm-project//mlir:SCFDialect",
+        "@llvm-project//mlir:Support",
+        "@llvm-project//mlir:TransformUtils",
+    ],
+)

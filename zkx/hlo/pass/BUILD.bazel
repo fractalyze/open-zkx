@@ -1,0 +1,64 @@
+# Copyright 2025 The ZKX Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
+load("//bazel:zkx_cc.bzl", "zkx_cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+zkx_cc_library(
+    name = "hlo_pass_fix",
+    hdrs = ["hlo_pass_fix.h"],
+    deps = [
+        ":hlo_pass_interface",
+        "//xla/tsl/platform:errors",
+        "//xla/tsl/platform:statusor",
+        "//zkx/hlo/ir:hlo",
+        "//zkx/hlo/ir:hlo_module_group",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+zkx_cc_library(
+    name = "hlo_pass_interface",
+    hdrs = ["hlo_pass_interface.h"],
+    deps = [
+        "//xla/tsl/platform:statusor",
+        "//zkx:shape_util",
+        "//zkx/hlo/ir:hlo",
+        "//zkx/hlo/ir:hlo_module_group",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+zkx_cc_library(
+    name = "hlo_pass_pipeline",
+    srcs = ["hlo_pass_pipeline.cc"],
+    hdrs = ["hlo_pass_pipeline.h"],
+    deps = [
+        ":hlo_pass_interface",
+        "//xla/tsl/platform:errors",
+        "//zkx:status_macros",
+        "//zkx/base:logging",
+        "//zkx/service:dump",
+        "@com_google_absl//absl/hash",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+    ],
+)

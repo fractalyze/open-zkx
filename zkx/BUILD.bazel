@@ -1,0 +1,518 @@
+# Copyright 2025 The ZKX Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
+load("@rules_cc//cc:defs.bzl", "cc_proto_library", "cc_test")
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("//bazel:zkx_cc.bzl", "zkx_cc_library", "zkx_cc_unittest")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["lit.cfg.py"])
+
+proto_library(
+    name = "autotune_results_proto",
+    srcs = ["autotune_results.proto"],
+    deps = [":autotuning_proto"],
+)
+
+cc_proto_library(
+    name = "autotune_results_cc_proto",
+    deps = [":autotune_results_proto"],
+)
+
+proto_library(
+    name = "autotuning_proto",
+    srcs = ["autotuning.proto"],
+    deps = [
+        "@com_google_protobuf//:any_proto",
+        "@com_google_protobuf//:duration_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "autotuning_cc_proto",
+    deps = [":autotuning_proto"],
+)
+
+proto_library(
+    name = "zkx_proto",
+    srcs = ["zkx.proto"],
+    deps = [
+        ":zkx_data_proto",
+        "//zkx/service:hlo_proto",
+        "@com_google_protobuf//:any_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "zkx_cc_proto",
+    deps = [":zkx_proto"],
+)
+
+proto_library(
+    name = "zkx_data_proto",
+    srcs = ["zkx_data.proto"],
+)
+
+cc_proto_library(
+    name = "zkx_data_cc_proto",
+    deps = [":zkx_data_proto"],
+)
+
+zkx_cc_library(
+    name = "array",
+    hdrs = ["array.h"],
+    deps = [
+        ":types",
+        ":util",
+        "@com_google_absl//absl/hash",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+zkx_cc_library(
+    name = "array2d",
+    hdrs = ["array2d.h"],
+    deps = [
+        ":array",
+        "//zkx/base:bits",
+        "@com_google_absl//absl/functional:function_ref",
+    ],
+)
+
+zkx_cc_library(
+    name = "array3d",
+    hdrs = ["array3d.h"],
+    deps = [":array"],
+)
+
+zkx_cc_library(
+    name = "array4d",
+    hdrs = ["array4d.h"],
+    deps = [":array"],
+)
+
+zkx_cc_library(
+    name = "comparison_util",
+    srcs = ["comparison_util.cc"],
+    hdrs = ["comparison_util.h"],
+    deps = [
+        ":primitive_util",
+        ":zkx_data_cc_proto",
+        "//zkx/base:random",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/debugging:leak_check",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+zkx_cc_library(
+    name = "debug_options_flags",
+    srcs = ["debug_options_flags.cc"],
+    hdrs = ["debug_options_flags.h"],
+    deps = [
+        ":debug_options_parsers",
+        ":parse_flags_from_env",
+        ":zkx_cc_proto",
+        "//xla/tsl/util:command_line_flags",
+        "//zkx/stream_executor/cuda:nvjitlink_support",
+        "//zkx/stream_executor/cuda:ptx_compiler_support",
+        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:node_hash_map",
+        "@com_google_absl//absl/debugging:leak_check",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+zkx_cc_library(
+    name = "debug_options_parsers",
+    hdrs = ["debug_options_parsers.h"],
+    deps = ["@com_google_absl//absl/strings"],
+)
+
+zkx_cc_library(
+    name = "executable_run_options",
+    srcs = ["executable_run_options.cc"],
+    hdrs = ["executable_run_options.h"],
+    deps = [
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/hash",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+zkx_cc_library(
+    name = "iterator_util",
+    hdrs = ["iterator_util.h"],
+    deps = ["//xla/tsl/lib/gtl:iterator_range"],
+)
+
+zkx_cc_library(
+    name = "lazy",
+    hdrs = ["lazy.h"],
+    deps = ["@com_google_absl//absl/functional:any_invocable"],
+)
+
+zkx_cc_library(
+    name = "literal",
+    srcs = ["literal.cc"],
+    hdrs = ["literal.h"],
+    deps = [
+        ":array",
+        ":array2d",
+        ":array3d",
+        ":array4d",
+        ":maybe_owning",
+        ":primitive_util",
+        ":shape_tree",
+        ":shape_util",
+        ":status_macros",
+        ":util",
+        "//xla/tsl/platform:mem",
+        "//xla/tsl/util:byte_swap_array",
+        "//zkx:permutation_util",
+        "@com_google_absl//absl/container:inlined_vector",
+        "@com_google_absl//absl/debugging:leak_check",
+        "@com_google_absl//absl/functional:function_ref",
+        "@com_google_absl//absl/log:check",
+        "@zk_dtypes//zk_dtypes:all_types",
+    ],
+)
+
+zkx_cc_library(
+    name = "literal_pool",
+    srcs = ["literal_pool.cc"],
+    hdrs = ["literal_pool.h"],
+    deps = [
+        ":literal",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/debugging:leak_check",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/synchronization",
+    ],
+)
+
+zkx_cc_library(
+    name = "literal_util",
+    srcs = ["literal_util.cc"],
+    hdrs = ["literal_util.h"],
+    deps = [
+        ":literal",
+        ":primitive_util",
+        ":shape_util",
+        "//zkx/base/containers:container_util",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+        "@zk_dtypes//zk_dtypes:big_int",
+        "@zk_dtypes//zk_dtypes:point_declarations",
+        "@zk_dtypes//zk_dtypes:prime_field",
+    ],
+)
+
+zkx_cc_library(
+    name = "map_util",
+    hdrs = ["map_util.h"],
+    deps = [
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+zkx_cc_library(
+    name = "maybe_owning",
+    hdrs = ["maybe_owning.h"],
+    deps = ["@com_google_absl//absl/log:check"],
+)
+
+zkx_cc_library(
+    name = "overflow_util",
+    hdrs = ["overflow_util.h"],
+    deps = ["@com_google_absl//absl/base:core_headers"],
+)
+
+zkx_cc_library(
+    name = "parse_flags_from_env",
+    srcs = ["parse_flags_from_env.cc"],
+    hdrs = ["parse_flags_from_env.h"],
+    deps = [
+        "//xla/tsl/util:command_line_flags",
+        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/debugging:leak_check",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/log:vlog_is_on",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+zkx_cc_library(
+    name = "permutation_util",
+    srcs = ["permutation_util.cc"],
+    hdrs = ["permutation_util.h"],
+    deps = [
+        "@com_google_absl//absl/container:inlined_vector",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+zkx_cc_library(
+    name = "primitive_util",
+    srcs = ["primitive_util.cc"],
+    hdrs = ["primitive_util.h"],
+    deps = [
+        ":types",
+        ":util",
+        ":zkx_data_cc_proto",
+        "//xla/tsl/lib/math:math_util",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/debugging:leak_check",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+        "@zk_dtypes//zk_dtypes:all_types",
+        "@zk_dtypes//zk_dtypes:extension_field",
+    ],
+)
+
+zkx_cc_library(
+    name = "printer",
+    srcs = ["printer.cc"],
+    hdrs = ["printer.h"],
+    deps = [
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:cord",
+    ],
+)
+
+zkx_cc_library(
+    name = "protobuf_util",
+    srcs = ["protobuf_util.cc"],
+    hdrs = ["protobuf_util.h"],
+    deps = [
+        "@com_google_absl//absl/hash",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+zkx_cc_library(
+    name = "shape_layout",
+    srcs = ["shape_layout.cc"],
+    hdrs = ["shape_layout.h"],
+    deps = [
+        ":printer",
+        ":shape_util",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+    ],
+)
+
+zkx_cc_library(
+    name = "shape_util",
+    srcs = [
+        "index_util.cc",
+        "layout.cc",
+        "layout_util.cc",
+        "shape.cc",
+        "shape_util.cc",
+    ],
+    hdrs = [
+        "index_util.h",
+        "layout.h",
+        "layout_util.h",
+        "shape.h",
+        "shape_util.h",
+    ],
+    deps = [
+        ":overflow_util",
+        ":permutation_util",
+        ":primitive_util",
+        ":printer",
+        ":util",
+        ":zkx_data_cc_proto",
+        "//xla/tsl/platform:cpu_info",
+        "//xla/tsl/platform:env",
+        "//xla/tsl/platform:errors",
+        "//xla/tsl/platform:statusor",
+        "//zkx/base/strings:string_util",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:inlined_vector",
+        "@com_google_absl//absl/debugging:leak_check",
+        "@com_google_absl//absl/functional:function_ref",
+        "@com_google_absl//absl/hash",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/log:vlog_is_on",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+zkx_cc_library(
+    name = "shape_tree",
+    srcs = ["shape_tree.cc"],
+    hdrs = ["shape_tree.h"],
+    deps = [
+        ":shape_util",
+        "//xla/tsl/lib/gtl:iterator_range",
+        "//xla/tsl/platform:errors",
+        "//xla/tsl/platform:statusor",
+        "@com_google_absl//absl/container:inlined_vector",
+        "@com_google_absl//absl/functional:function_ref",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+    ],
+)
+
+zkx_cc_library(
+    name = "status_macros",
+    srcs = ["status_macros.cc"],
+    hdrs = ["status_macros.h"],
+    deps = [
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/base:log_severity",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+zkx_cc_library(
+    name = "types",
+    hdrs = ["types.h"],
+    deps = [
+        "@zk_dtypes//zk_dtypes:big_int",
+        "@zk_dtypes//zk_dtypes:intn",
+    ],
+)
+
+zkx_cc_library(
+    name = "util",
+    srcs = ["util.cc"],
+    hdrs = ["util.h"],
+    deps = [
+        ":status_macros",
+        ":zkx_data_cc_proto",
+        "//xla/tsl/lib/math:math_util",
+        "//xla/tsl/platform:numbers",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/container:inlined_vector",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+        "@eigen_archive//:eigen3",
+    ],
+)
+
+zkx_cc_library(
+    name = "union_find",
+    hdrs = ["union_find.h"],
+)
+
+zkx_cc_library(
+    name = "window_util",
+    srcs = ["window_util.cc"],
+    hdrs = ["window_util.h"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":types",
+        ":zkx_data_cc_proto",
+        "@com_google_absl//absl/functional:function_ref",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+zkx_cc_unittest(
+    name = "zkx_unittests",
+    srcs = [
+        "array2d_unittest.cc",
+        "array3d_unittest.cc",
+        "array_unittest.cc",
+        "comparison_util_unittest.cc",
+        "index_util_unittest.cc",
+        "iterator_util_unittest.cc",
+        "layout_unittest.cc",
+        "layout_util_unittest.cc",
+        "maybe_owning_unittest.cc",
+        "permutation_util_unittest.cc",
+        "status_macros_unittest.cc",
+        "util_unittest.cc",
+        "window_util_unittest.cc",
+    ],
+    deps = [
+        ":array",
+        ":array2d",
+        ":array3d",
+        ":comparison_util",
+        ":debug_options_flags",
+        ":debug_options_parsers",
+        ":iterator_util",
+        ":maybe_owning",
+        ":permutation_util",
+        ":shape_util",
+        ":status_macros",
+        ":util",
+        ":window_util",
+        ":zkx_cc_proto",
+        "//xla/tsl/platform:env",
+        "//xla/tsl/platform:errors",
+        "//xla/tsl/platform:statusor",
+    ],
+)
+
+cc_test(
+    name = "parse_flags_from_env_unittest",
+    srcs = ["parse_flags_from_env_unittest.cc"],
+    deps = [
+        ":parse_flags_from_env",
+        "//xla/tsl/platform:env",
+        "//xla/tsl/platform:subprocess",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_googletest//:gtest",
+    ],
+)

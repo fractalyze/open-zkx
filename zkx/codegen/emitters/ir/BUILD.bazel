@@ -1,0 +1,97 @@
+# Copyright 2025 The ZKX Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
+load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library", "td_library")
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+td_library(
+    name = "zkx_td_files",
+    srcs = glob(["*.td"]),
+    includes = ["."],
+    deps = [
+        "@llvm-project//mlir:AttrTdFiles",
+        "@llvm-project//mlir:BuiltinDialectTdFiles",
+        "@llvm-project//mlir:CallInterfacesTdFiles",
+        "@llvm-project//mlir:ControlFlowInterfacesTdFiles",
+        "@llvm-project//mlir:OpBaseTdFiles",
+        "@llvm-project//mlir:SideEffectInterfacesTdFiles",
+    ],
+)
+
+gentbl_cc_library(
+    name = "zkx_dialect_inc_gen",
+    strip_include_prefix = ".",
+    tbl_outs = {
+        "zkx_dialect.h.inc": ["-gen-dialect-decls"],
+        "zkx_dialect.cc.inc": ["-gen-dialect-defs"],
+    },
+    tblgen = "@llvm-project//mlir:mlir-tblgen",
+    td_file = "zkx_dialect.td",
+    deps = [":zkx_td_files"],
+)
+
+gentbl_cc_library(
+    name = "zkx_ops_inc_gen",
+    strip_include_prefix = ".",
+    tbl_outs = {
+        "zkx_ops.h.inc": ["-gen-op-decls"],
+        "zkx_ops.cc.inc": ["-gen-op-defs"],
+    },
+    tblgen = "@llvm-project//mlir:mlir-tblgen",
+    td_file = "zkx_ops.td",
+    deps = [":zkx_td_files"],
+)
+
+gentbl_cc_library(
+    name = "zkx_attrs_inc_gen",
+    strip_include_prefix = ".",
+    tbl_outs = {
+        "zkx_enums.h.inc": ["-gen-enum-decls"],
+        "zkx_enums.cc.inc": ["-gen-enum-defs"],
+        "zkx_attrs.h.inc": ["-gen-attrdef-decls"],
+        "zkx_attrs.cc.inc": ["-gen-attrdef-defs"],
+    },
+    tblgen = "@llvm-project//mlir:mlir-tblgen",
+    td_file = "zkx_attrs.td",
+    deps = [":zkx_td_files"],
+)
+
+cc_library(
+    name = "zkx",
+    srcs = [
+        "zkx_attrs.cc",
+        "zkx_dialect.cc",
+        "zkx_ops.cc",
+    ],
+    hdrs = ["zkx_ops.h"],
+    deps = [
+        ":zkx_attrs_inc_gen",
+        ":zkx_dialect_inc_gen",
+        ":zkx_ops_inc_gen",
+        "//zkx/hlo/analysis:indexing_analysis",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@llvm-project//llvm:Support",
+        "@llvm-project//mlir:ArithDialect",
+        "@llvm-project//mlir:FuncDialect",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:InliningUtils",
+        "@llvm-project//mlir:SCFDialect",
+        "@llvm-project//mlir:Support",
+    ],
+)

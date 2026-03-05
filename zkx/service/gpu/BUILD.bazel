@@ -1,0 +1,679 @@
+# Copyright 2025 The ZKX Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
+load("@rules_cc//cc:defs.bzl", "cc_proto_library")
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("//bazel:zkx_cc.bzl", "zkx_cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+proto_library(
+    name = "backend_configs_proto",
+    srcs = ["backend_configs.proto"],
+    deps = ["//zkx:zkx_data_proto"],
+)
+
+cc_proto_library(
+    name = "backend_configs_cc_proto",
+    deps = [":backend_configs_proto"],
+)
+
+proto_library(
+    name = "executable_proto",
+    srcs = ["executable.proto"],
+    deps = [
+        "//zkx:zkx_proto",
+        "//zkx/service:hlo_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "executable_cc_proto",
+    deps = [":executable_proto"],
+)
+
+zkx_cc_library(
+    name = "buffer_allocations",
+    srcs = ["buffer_allocations.cc"],
+    hdrs = ["buffer_allocations.h"],
+    deps = [
+        "//zkx/service:buffer_assignment",
+        "//zkx/stream_executor:device_memory",
+        "//zkx/stream_executor:device_memory_allocator",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+zkx_cc_library(
+    name = "buffer_sharing",
+    srcs = ["buffer_sharing.cc"],
+    hdrs = ["buffer_sharing.h"],
+    deps = [
+        ":hlo_fusion_analysis",
+        "//zkx:primitive_util",
+        "//zkx:shape_util",
+        "//zkx/hlo/ir:hlo",
+        "//zkx/stream_executor:device_description",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/log:check",
+        "@llvm-project//llvm:Support",
+    ],
+)
+
+zkx_cc_library(
+    name = "compile_module_to_llvm_ir",
+    srcs = ["compile_module_to_llvm_ir.cc"],
+    hdrs = ["compile_module_to_llvm_ir.h"],
+    deps = [
+        ":executable_cc_proto",
+        ":execution_stream_assignment",
+        ":gpu_constants",
+        ":gpu_executable",
+        ":gpu_memory_space_assignment",
+        ":ir_emitter_context",
+        ":ir_emitter_unnested",
+        "//xla/tsl/platform:env",
+        "//xla/tsl/platform:errors",
+        "//xla/tsl/platform:path",
+        "//xla/tsl/platform:statusor",
+        "//zkx:shape_util",
+        "//zkx:status_macros",
+        "//zkx:util",
+        "//zkx:zkx_data_cc_proto",
+        "//zkx/backends/gpu/runtime:sequential_thunk",
+        "//zkx/hlo/analysis:hlo_ordering",
+        "//zkx/hlo/ir:hlo",
+        "//zkx/service:buffer_assignment",
+        "//zkx/service:buffer_value",
+        "//zkx/service:dump",
+        "//zkx/service:logical_buffer",
+        "//zkx/stream_executor:device_description",
+        "//zkx/stream_executor:platform",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@llvm-project//llvm:Core",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:Support",
+    ],
+)
+
+zkx_cc_library(
+    name = "execution_stream_assignment",
+    srcs = ["execution_stream_assignment.cc"],
+    hdrs = ["execution_stream_assignment.h"],
+    deps = [
+        "//zkx/backends/gpu/runtime:thunk",
+        "//zkx/hlo/ir:hlo",
+        "//zkx/service:call_graph",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+zkx_cc_library(
+    name = "fusion_pipeline",
+    srcs = ["fusion_pipeline.cc"],
+    hdrs = ["fusion_pipeline.h"],
+    deps = [
+        "//xla/tsl/platform:env",
+        "//zkx:zkx_cc_proto",
+        "//zkx/hlo/pass:hlo_pass_fix",
+        "//zkx/hlo/pass:hlo_pass_pipeline",
+        "//zkx/hlo/transforms/simplifiers:hlo_cse",
+        "//zkx/hlo/transforms/simplifiers:hlo_dce",
+        "//zkx/service:hlo_cost_analysis",
+        "//zkx/service/gpu/model:gpu_hlo_cost_analysis",
+        "//zkx/service/gpu/transforms:multi_output_fusion",
+        "//zkx/service/gpu/transforms:priority_fusion",
+        "//zkx/stream_executor:device_description",
+    ],
+)
+
+zkx_cc_library(
+    name = "gpu_compiler",
+    srcs = ["gpu_compiler.cc"],
+    hdrs = ["gpu_compiler.h"],
+    deps = [
+        ":buffer_sharing",
+        ":compile_module_to_llvm_ir",
+        ":execution_stream_assignment",
+        ":fusion_pipeline",
+        ":gpu_executable",
+        ":gpu_hlo_schedule",
+        ":ir_emission_utils",
+        ":ir_emitter_context",
+        ":ir_emitter_unnested",
+        ":kernel_reuse_cache",
+        ":prepare_hlo_for_ir_emitting_pipeline",
+        "//xla/tsl/platform:casts",
+        "//xla/tsl/platform:cpu_info",
+        "//xla/tsl/platform:env",
+        "//xla/tsl/platform:errors",
+        "//xla/tsl/platform:path",
+        "//xla/tsl/platform:statusor",
+        "//zkx:maybe_owning",
+        "//zkx:shape_util",
+        "//zkx:status_macros",
+        "//zkx:zkx_cc_proto",
+        "//zkx:zkx_data_cc_proto",
+        "//zkx/base:logging",
+        "//zkx/hlo/analysis:hlo_dataflow_analysis",
+        "//zkx/hlo/ir:hlo",
+        "//zkx/hlo/ir:hlo_module_group",
+        "//zkx/service:buffer_assignment",
+        "//zkx/service:call_inliner",
+        "//zkx/service:dump",
+        "//zkx/service:llvm_compiler",
+        "//zkx/service:scatter_simplifier",
+        "//zkx/service/llvm_ir:llvm_command_line_options",
+        "//zkx/service/llvm_ir:llvm_util",
+        "//zkx/stream_executor",
+        "//zkx/stream_executor:device_description",
+        "//zkx/stream_executor:platform",
+        "//zkx/stream_executor:platform_manager",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/log:vlog_is_on",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_protobuf//:protobuf",
+        "@llvm-project//llvm:Core",
+        "@llvm-project//llvm:Support",
+        "@llvm-project//llvm:TransformUtils",
+        "@llvm-project//mlir:IR",
+    ],
+)
+
+zkx_cc_library(
+    name = "gpu_constants",
+    hdrs = ["gpu_constants.h"],
+)
+
+zkx_cc_library(
+    name = "gpu_transfer_manager",
+    srcs = ["gpu_transfer_manager.cc"],
+    hdrs = ["gpu_transfer_manager.h"],
+    deps = [
+        ":target_constants",
+        "//xla/tsl/platform:errors",
+        "//xla/tsl/platform:numbers",
+        "//xla/tsl/platform:statusor",
+        "//zkx:shape_util",
+        "//zkx:status_macros",
+        "//zkx/service:compiler",
+        "//zkx/service:generic_transfer_manager",
+        "//zkx/stream_executor:device_memory",
+        "//zkx/stream_executor:event",
+        "//zkx/stream_executor:memory_allocation",
+        "//zkx/stream_executor:platform",
+        "//zkx/stream_executor/cuda:cuda_platform_id",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/cleanup",
+        "@com_google_absl//absl/container:node_hash_map",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/synchronization",
+        "@llvm-project//llvm:Core",
+    ],
+)
+
+zkx_cc_library(
+    name = "gpu_executable",
+    srcs = ["gpu_executable.cc"],
+    hdrs = ["gpu_executable.h"],
+    deps = [
+        ":buffer_allocations",
+        ":gpu_constants",
+        ":gpu_executable_run_options",
+        ":ir_emission_utils",
+        ":resource_requests",
+        ":stream_executor_util",
+        "//xla/tsl/platform:errors",
+        "//xla/tsl/platform:statusor",
+        "//zkx:executable_run_options",
+        "//zkx:map_util",
+        "//zkx:shape_tree",
+        "//zkx:status_macros",
+        "//zkx:util",
+        "//zkx/backends/gpu/runtime:sequential_thunk",
+        "//zkx/backends/gpu/runtime:thunk",
+        "//zkx/hlo/ir:hlo",
+        "//zkx/service:buffer_assignment",
+        "//zkx/service:executable",
+        "//zkx/service:hlo_value",
+        "//zkx/service:maybe_owning_device_memory",
+        "//zkx/service:stream_pool",
+        "//zkx/service:zkx_debug_info_manager",
+        "//zkx/stream_executor",
+        "//zkx/stream_executor:device_description",
+        "//zkx/stream_executor:device_memory",
+        "//zkx/stream_executor:device_memory_allocator",
+        "//zkx/stream_executor:event_based_timer",
+        "//zkx/stream_executor:module_spec",
+        "//zkx/stream_executor:platform",
+        "//zkx/stream_executor:scoped_module_handle",
+        "//zkx/stream_executor:stream",
+        "//zkx/stream_executor/cuda:cuda_platform_id",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/log:vlog_is_on",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:variant",
+    ],
+)
+
+zkx_cc_library(
+    name = "gpu_executable_run_options",
+    srcs = ["gpu_executable_run_options.cc"],
+    hdrs = ["gpu_executable_run_options.h"],
+    deps = [
+        "//zkx:executable_run_options",
+    ],
+)
+
+zkx_cc_library(
+    name = "gpu_fusible",
+    srcs = ["gpu_fusible.cc"],
+    hdrs = ["gpu_fusible.h"],
+    deps = [
+        ":hlo_fusion_analysis",
+        ":ir_emission_utils",
+        ":launch_dimensions",
+        ":reduction_utils",
+        "//zkx:permutation_util",
+        "//zkx:shape_util",
+        "//zkx:util",
+        "//zkx/hlo/analysis:hlo_dataflow_analysis",
+        "//zkx/hlo/ir:hlo",
+        "//zkx/hlo/utils:hlo_traversal",
+        "//zkx/service:instruction_fusion",
+        "//zkx/stream_executor:device_description",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/container:inlined_vector",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/numeric:bits",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/synchronization",
+    ],
+)
+
+zkx_cc_library(
+    name = "gpu_hlo_schedule",
+    srcs = ["gpu_hlo_schedule.cc"],
+    hdrs = ["gpu_hlo_schedule.h"],
+    deps = [
+        ":ir_emission_utils",
+        "//xla/tsl/platform:statusor",
+        "//zkx/hlo/ir:hlo",
+        "//zkx/hlo/transforms/simplifiers:hlo_memory_scheduler",
+        "//zkx/service:buffer_value",
+        "//zkx/service:hlo_module_config",
+        "//zkx/stream_executor:device_description",
+        "@com_google_absl//absl/log",
+    ],
+)
+
+zkx_cc_library(
+    name = "gpu_memory_space_assignment",
+    hdrs = ["gpu_memory_space_assignment.h"],
+    deps = [
+        "//zkx/hlo/analysis:hlo_alias_analysis",
+        "//zkx/hlo/analysis:hlo_ordering",
+        "//zkx/hlo/ir:hlo_opcode",
+        "//zkx/service:buffer_assignment",
+        "//zkx/service:hlo_buffer",
+        "//zkx/service:hlo_value",
+        "@com_google_absl//absl/status",
+    ],
+)
+
+zkx_cc_library(
+    name = "hlo_fusion_analysis",
+    srcs = ["hlo_fusion_analysis.cc"],
+    hdrs = ["hlo_fusion_analysis.h"],
+    deps = [
+        ":backend_configs_cc_proto",
+        ":ir_emission_utils",
+        ":reduction_utils",
+        "//zkx:primitive_util",
+        "//zkx:shape_util",
+        "//zkx/hlo/ir:hlo",
+        "//zkx/hlo/utils:hlo_traversal",
+        "//zkx/stream_executor:device_description",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/container:inlined_vector",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
+        "@llvm-project//llvm:Support",
+    ],
+)
+
+zkx_cc_library(
+    name = "ir_emission_utils",
+    srcs = ["ir_emission_utils.cc"],
+    hdrs = ["ir_emission_utils.h"],
+    deps = [
+        "//xla/tsl/platform:statusor",
+        "//zkx:literal",
+        "//zkx:primitive_util",
+        "//zkx:shape_util",
+        "//zkx:util",
+        "//zkx/hlo/ir:hlo",
+        "//zkx/hlo/utils:hlo_traversal",
+        "//zkx/service:buffer_assignment",
+        "//zkx/stream_executor:device_description",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/container:inlined_vector",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+zkx_cc_library(
+    name = "ir_emitter",
+    srcs = ["ir_emitter.cc"],
+    hdrs = ["ir_emitter.h"],
+    deps = [
+        ":ir_emitter_context",
+        "//zkx/hlo/ir:dfs_hlo_visitor_with_default",
+        "//zkx/hlo/ir:hlo",
+        "@com_google_absl//absl/log",
+        "@llvm-project//llvm:Core",
+    ],
+)
+
+zkx_cc_library(
+    name = "ir_emitter_context",
+    srcs = ["ir_emitter_context.cc"],
+    hdrs = ["ir_emitter_context.h"],
+    deps = [
+        ":execution_stream_assignment",
+        ":gpu_constants",
+        ":gpu_executable",
+        ":ir_emission_utils",
+        ":kernel_reuse_cache",
+        "//zkx/hlo/ir:hlo",
+        "//zkx/service:buffer_assignment",
+        "//zkx/service:name_uniquer",
+        "//zkx/stream_executor:device_description",
+        "@com_google_absl//absl/algorithm:container",
+        "@llvm-project//llvm:Core",
+        "@llvm-project//llvm:Support",
+        "@llvm-project//llvm:TargetParser",
+        "@llvm-project//mlir:IR",
+    ],
+)
+
+zkx_cc_library(
+    name = "ir_emitter_unnested",
+    srcs = ["ir_emitter_unnested.cc"],
+    hdrs = ["ir_emitter_unnested.h"],
+    deps = [
+        ":hlo_fusion_analysis",
+        ":ir_emission_utils",
+        ":ir_emitter",
+        ":ir_emitter_context",
+        ":stream_executor_util",
+        "//xla/tsl/platform:statusor",
+        "//zkx:shape_util",
+        "//zkx:status_macros",
+        "//zkx/backends/gpu/codegen:fusion_emitter",
+        "//zkx/backends/gpu/codegen:fusions",
+        "//zkx/backends/gpu/runtime:command_buffer_cmd",
+        "//zkx/backends/gpu/runtime:command_buffer_cmd_emitter",
+        "//zkx/backends/gpu/runtime:command_buffer_thunk",
+        "//zkx/backends/gpu/runtime:copy_thunk",
+        "//zkx/backends/gpu/runtime:sequential_thunk",
+        "//zkx/backends/gpu/runtime:thunk",
+        "//zkx/backends/gpu/runtime:wait_for_streams_thunk",
+        "//zkx/backends/gpu/runtime:while_thunk",
+        "//zkx/hlo/ir:hlo",
+        "//zkx/service:buffer_assignment",
+        "//zkx/service/llvm_ir:buffer_assignment_util",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+zkx_cc_library(
+    name = "kernel_arguments",
+    srcs = ["kernel_arguments.cc"],
+    hdrs = ["kernel_arguments.h"],
+    deps = [
+        ":gpu_constants",
+        "//xla/tsl/platform:errors",
+        "//xla/tsl/platform:statusor",
+        "//zkx:shape_util",
+        "//zkx/hlo/ir:hlo",
+        "//zkx/service:buffer_assignment",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+zkx_cc_library(
+    name = "kernel_reuse_cache",
+    srcs = ["kernel_reuse_cache.cc"],
+    hdrs = ["kernel_reuse_cache.h"],
+    deps = [
+        ":executable_cc_proto",
+        ":kernel_arguments",
+        ":launch_dimensions",
+        "//xla/tsl/platform:env",
+        "//xla/tsl/platform:errors",
+        "//xla/tsl/platform:statusor",
+        "//zkx:status_macros",
+        "//zkx/base:logging",
+        "//zkx/hlo/ir:hlo",
+        "//zkx/stream_executor:launch_dim",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+zkx_cc_library(
+    name = "launch_dimensions",
+    srcs = ["launch_dimensions.cc"],
+    hdrs = ["launch_dimensions.h"],
+    deps = [
+        "//zkx:shape_util",
+        "//zkx:util",
+        "//zkx/stream_executor:device_description",
+        "//zkx/stream_executor:launch_dim",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+zkx_cc_library(
+    name = "matmul_indexing_utils",
+    srcs = ["matmul_indexing_utils.cc"],
+    hdrs = ["matmul_indexing_utils.h"],
+    deps = [
+        "//zkx/hlo/ir:hlo",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
+        "@com_google_protobuf//:protobuf_lite",
+    ],
+)
+
+zkx_cc_library(
+    name = "prepare_hlo_for_ir_emitting_pipeline",
+    srcs = ["prepare_hlo_for_ir_emitting_pipeline.cc"],
+    hdrs = ["prepare_hlo_for_ir_emitting_pipeline.h"],
+    deps = [
+        "//zkx/hlo/analysis:hlo_dataflow_analysis",
+        "//zkx/hlo/ir:hlo",
+        "//zkx/hlo/pass:hlo_pass_pipeline",
+        "//zkx/hlo/transforms/simplifiers:hlo_dce",
+        "//zkx/service:copy_insertion",
+        "//zkx/stream_executor:device_description",
+    ],
+)
+
+zkx_cc_library(
+    name = "nvptx_compiler",
+    srcs = ["nvptx_compiler.cc"],
+    hdrs = ["nvptx_compiler.h"],
+    tags = [
+        "cuda_only",
+        "gpu",
+    ],
+    deps = [
+        ":buffer_sharing",
+        ":gpu_compiler",
+        ":ptx_compile_options_from_debug_options",
+        ":target_constants",
+        "//xla/tsl/platform:path",
+        "//xla/tsl/platform:statusor",
+        "//zkx:shape_util",
+        "//zkx/service:dump",
+        "//zkx/service/gpu/llvm_gpu_backend:nvptx_backend",
+        "//zkx/stream_executor/cuda:assemble_compilation_provider",
+        "//zkx/stream_executor/cuda:compilation_provider",
+        "//zkx/stream_executor/cuda:compilation_provider_options",
+        "//zkx/stream_executor/cuda:cuda_diagnostics",
+        "//zkx/stream_executor/cuda:cuda_platform_id",
+        "//zkx/stream_executor/cuda:subprocess_compilation",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/synchronization",
+        "@llvm-project//llvm:Core",
+        "@llvm-project//llvm:IRReader",
+        "@llvm-project//llvm:Support",
+    ],
+)
+
+zkx_cc_library(
+    name = "nvptx_compiler_registerer",
+    srcs = ["nvptx_compiler_registerer.cc"],
+    tags = [
+        "cuda_only",
+        "gpu",
+    ],
+    deps = [
+        ":nvptx_compiler",
+        "//zkx/service:compiler",
+        "//zkx/stream_executor/cuda:cuda_platform_id",
+    ],
+)
+
+zkx_cc_library(
+    name = "ptx_compile_options_from_debug_options",
+    srcs = ["ptx_compile_options_from_debug_options.cc"],
+    hdrs = ["ptx_compile_options_from_debug_options.h"],
+    deps = [
+        "//zkx:zkx_cc_proto",
+        "//zkx/stream_executor/cuda:compilation_options",
+    ],
+)
+
+zkx_cc_library(
+    name = "reduction_utils",
+    srcs = ["reduction_utils.cc"],
+    hdrs = ["reduction_utils.h"],
+    deps = [
+        ":ir_emission_utils",
+        "//zkx:shape_util",
+        "//zkx:util",
+        "//zkx/hlo/ir:hlo",
+        "//zkx/stream_executor:device_description",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/container:inlined_vector",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+zkx_cc_library(
+    name = "resource_requests",
+    srcs = ["resource_requests.cc"],
+    hdrs = ["resource_requests.h"],
+    deps = [
+        "//zkx/backends/gpu/runtime:thunk",
+    ],
+)
+
+zkx_cc_library(
+    name = "stream_executor_util",
+    srcs = ["stream_executor_util.cc"],
+    hdrs = ["stream_executor_util.h"],
+    deps = [
+        ":launch_dimensions",
+        "//xla/tsl/platform:statusor",
+        "//zkx/service:hlo_module_config",
+        "//zkx/stream_executor",
+        "//zkx/stream_executor:device_memory",
+        "//zkx/stream_executor:kernel",
+        "//zkx/stream_executor:kernel_spec",
+        "//zkx/stream_executor:launch_dim",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/debugging:leak_check",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+zkx_cc_library(
+    name = "target_constants",
+    hdrs = ["target_constants.h"],
+)
+
+zkx_cc_library(
+    name = "target_util",
+    srcs = ["target_util.cc"],
+    hdrs = ["target_util.h"],
+    deps = [
+        "@com_google_absl//absl/log",
+        "@llvm-project//llvm:Core",
+        "@llvm-project//llvm:TargetParser",
+    ],
+)

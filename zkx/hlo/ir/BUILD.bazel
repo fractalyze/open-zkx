@@ -1,0 +1,245 @@
+# Copyright 2025 The ZKX Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
+load("//bazel:zkx_cc.bzl", "zkx_cc_library", "zkx_cc_unittest")
+
+package(default_visibility = ["//visibility:public"])
+
+zkx_cc_library(
+    name = "backend_config",
+    srcs = ["backend_config.cc"],
+    hdrs = ["backend_config.h"],
+    deps = [
+        "//xla/tsl/platform:errors",
+        "//xla/tsl/platform:human_readable_json",
+        "//zkx:array",
+        "//zkx:zkx_data_cc_proto",
+        "//zkx/base:logging",
+        "@com_google_absl//absl/debugging:leak_check",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+zkx_cc_library(
+    name = "dfs_hlo_visitor_with_default",
+    srcs = ["dfs_hlo_visitor_with_default.h"],
+    deps = [
+        ":hlo",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+zkx_cc_library(
+    name = "dynamic_parameter_binding",
+    srcs = ["dynamic_parameter_binding.cc"],
+    hdrs = ["dynamic_parameter_binding.h"],
+    deps = [
+        ":hlo",
+        "//xla/tsl/platform:errors",
+        "//zkx:shape_util",
+        "//zkx:status_macros",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/hash",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+zkx_cc_library(
+    name = "hlo",
+    srcs = [
+        "dfs_hlo_visitor.cc",
+        "hlo_computation.cc",
+        "hlo_input_output_alias_config.cc",
+        "hlo_instruction.cc",
+        "hlo_instructions.cc",
+        "hlo_module.cc",
+        "hlo_schedule.cc",
+    ],
+    hdrs = [
+        "dfs_hlo_visitor.h",
+        "hlo_casting_utils.h",
+        "hlo_computation.h",
+        "hlo_input_output_alias_config.h",
+        "hlo_instruction.h",
+        "hlo_instructions.h",
+        "hlo_module.h",
+        "hlo_schedule.h",
+    ],
+    deps = [
+        ":backend_config",
+        ":hlo_clone_context",
+        ":hlo_module_metadata",
+        ":hlo_op_metadata",
+        ":hlo_opcode",
+        ":hlo_original_value",
+        ":hlo_print_options",
+        ":ptr_vec",
+        "//xla/tsl/lib/gtl:iterator_range",
+        "//xla/tsl/lib/gtl:map_util",
+        "//xla/tsl/platform:casts",
+        "//xla/tsl/platform:errors",
+        "//xla/tsl/platform:fingerprint",
+        "//zkx:comparison_util",
+        "//zkx:iterator_util",
+        "//zkx:literal",
+        "//zkx:literal_pool",
+        "//zkx:literal_util",
+        "//zkx:printer",
+        "//zkx:protobuf_util",
+        "//zkx:shape_tree",
+        "//zkx:shape_util",
+        "//zkx:status_macros",
+        "//zkx:util",
+        "//zkx:window_util",
+        "//zkx/base:logging",
+        "//zkx/service:compilation_environments",
+        "//zkx/service:computation_layout",
+        "//zkx/service:hlo_cc_proto",
+        "//zkx/service:hlo_module_config",
+        "//zkx/service:mapped_ptr_container_sorter",
+        "//zkx/service:name_uniquer",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/container:inlined_vector",
+        "@com_google_absl//absl/functional:function_ref",
+        "@com_google_absl//absl/hash",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+zkx_cc_library(
+    name = "hlo_clone_context",
+    hdrs = ["hlo_clone_context.h"],
+    deps = [
+        "//zkx:map_util",
+        "@com_google_absl//absl/container:flat_hash_map",
+    ],
+)
+
+zkx_cc_library(
+    name = "hlo_module_group",
+    srcs = ["hlo_module_group.cc"],
+    hdrs = ["hlo_module_group.h"],
+    deps = [
+        ":hlo",
+        "//zkx/service:hlo_cc_proto",
+        "//zkx/service:hlo_module_config",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+zkx_cc_library(
+    name = "hlo_module_metadata",
+    srcs = ["hlo_module_metadata.cc"],
+    hdrs = ["hlo_module_metadata.h"],
+    deps = [
+        "//xla/tsl/platform:env",
+        "//xla/tsl/platform:statusor",
+        "//zkx/service:hlo_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+zkx_cc_library(
+    name = "hlo_op_metadata",
+    srcs = ["hlo_op_metadata.cc"],
+    hdrs = ["hlo_op_metadata.h"],
+    deps = [
+        "//zkx:zkx_data_cc_proto",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+zkx_cc_library(
+    name = "hlo_opcode",
+    srcs = ["hlo_opcode.cc"],
+    hdrs = ["hlo_opcode.h"],
+    deps = [
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/debugging:leak_check",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+zkx_cc_library(
+    name = "hlo_original_value",
+    srcs = ["hlo_original_value.cc"],
+    hdrs = ["hlo_original_value.h"],
+    deps = [
+        "//zkx:shape_tree",
+        "//zkx:shape_util",
+        "//zkx:zkx_data_cc_proto",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+zkx_cc_library(
+    name = "hlo_print_options",
+    hdrs = ["hlo_print_options.h"],
+    deps = [
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+zkx_cc_library(
+    name = "ptr_vec",
+    hdrs = ["ptr_vec.h"],
+    deps = ["//zkx:shape_util"],
+)
+
+zkx_cc_unittest(
+    name = "ir_unittests",
+    srcs = [
+        "backend_config_unittest.cc",
+        "hlo_instruction_unittest.cc",
+        "hlo_module_unittest.cc",
+        "ptr_vec_unittest.cc",
+    ],
+    deps = [
+        ":backend_config",
+        ":hlo",
+        ":ptr_vec",
+        "//zkx:literal_util",
+        "//zkx:shape_util",
+        "//zkx:zkx_data_cc_proto",
+        "//zkx/service:hlo_module_config",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/synchronization",
+    ],
+)

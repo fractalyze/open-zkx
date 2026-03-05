@@ -1,0 +1,114 @@
+# Copyright 2025 The ZKX Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
+load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library", "td_library")
+load("//bazel:zkx_cc.bzl", "zkx_cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+td_library(
+    name = "hlo_ops_td_files",
+    srcs = glob(["*.td"]),
+    includes = ["."],
+    deps = [
+        "@llvm-project//mlir:InferTypeOpInterfaceTdFiles",
+        "@llvm-project//mlir:OpBaseTdFiles",
+        "@llvm-project//mlir:ShapeOpsTdFiles",
+        "@llvm-project//mlir:SideEffectInterfacesTdFiles",
+        "@llvm-project//mlir:TensorOpsTdFiles",
+        "@stablehlo//stablehlo/dialect:base_td_files",
+    ],
+)
+
+gentbl_cc_library(
+    name = "hlo_ops_inc_gen",
+    strip_include_prefix = ".",
+    tbl_outs = {
+        "hlo_ops.h.inc": ["-gen-op-decls"],
+        "hlo_ops.cc.inc": ["-gen-op-defs"],
+    },
+    tblgen = "@llvm-project//mlir:mlir-tblgen",
+    td_file = "hlo_ops.td",
+    deps = [":hlo_ops_td_files"],
+)
+
+gentbl_cc_library(
+    name = "hlo_ops_attrs_inc_gen",
+    strip_include_prefix = ".",
+    tbl_outs = {
+        "hlo_ops_attrs.h.inc": [
+            "-gen-attrdef-decls",
+            "--attrdefs-dialect=mhlo",
+        ],
+        "hlo_ops_attrs.cc.inc": [
+            "-gen-attrdef-defs",
+            "--attrdefs-dialect=mhlo",
+        ],
+    },
+    tblgen = "@llvm-project//mlir:mlir-tblgen",
+    td_file = "hlo_ops.td",
+    deps = [":hlo_ops_td_files"],
+)
+
+gentbl_cc_library(
+    name = "hlo_ops_enums_inc_gen",
+    strip_include_prefix = ".",
+    tbl_outs = {
+        "hlo_ops_enums.h.inc": ["-gen-enum-decls"],
+        "hlo_ops_enums.cc.inc": ["-gen-enum-defs"],
+    },
+    tblgen = "@llvm-project//mlir:mlir-tblgen",
+    td_file = "hlo_ops.td",
+    deps = [":hlo_ops_td_files"],
+)
+
+zkx_cc_library(
+    name = "mlir_hlo",
+    srcs = [
+        "hlo_ops.cc",
+        "hlo_ops.cc.inc",
+        "hlo_ops.h.inc",
+        "hlo_ops_attrs.cc.inc",
+        "hlo_ops_attrs.h.inc",
+        "hlo_ops_enums.cc.inc",
+        "hlo_ops_enums.h.inc",
+    ],
+    hdrs = ["hlo_ops.h"],
+    strip_include_prefix = ".",
+    deps = [
+        ":hlo_ops_attrs_inc_gen",
+        ":hlo_ops_enums_inc_gen",
+        ":hlo_ops_inc_gen",
+        "//zkx/mlir_hlo/utils:hlo_utils",
+        "@llvm-project//llvm:Support",
+        "@llvm-project//mlir:ArithDialect",
+        "@llvm-project//mlir:BytecodeOpInterface",
+        "@llvm-project//mlir:DataLayoutInterfaces",
+        "@llvm-project//mlir:Dialect",
+        "@llvm-project//mlir:FuncDialect",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:InferTypeOpInterface",
+        "@llvm-project//mlir:InliningUtils",
+        "@llvm-project//mlir:ShapeDialect",
+        "@llvm-project//mlir:SideEffectInterfaces",
+        "@llvm-project//mlir:Support",
+        "@llvm-project//mlir:TensorDialect",
+        "@prime_ir//prime_ir/Dialect/EllipticCurve/IR:EllipticCurve",
+        "@prime_ir//prime_ir/Dialect/Field/IR:Field",
+        "@stablehlo//stablehlo/dialect:assembly_format",
+        "@stablehlo//stablehlo/dialect:base",
+        "@stablehlo//stablehlo/dialect:type_inference",
+    ],
+)

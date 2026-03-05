@@ -1,0 +1,118 @@
+# Copyright 2025 The ZKX Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+load("@version//:build_defs.bzl", "version_header")
+load("//bazel:zkx.bzl", "VERSION_MAJOR", "VERSION_MINOR", "VERSION_PATCH", "VERSION_PRERELEASE")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files(["requirements_lock_3_11.txt"])
+
+bool_flag(
+    name = "has_exception",
+    build_setting_default = False,
+)
+
+bool_flag(
+    name = "has_intel_openmp",
+    build_setting_default = False,
+)
+
+bool_flag(
+    name = "has_openmp",
+    build_setting_default = False,
+)
+
+# Platform specific configurations
+config_setting(
+    name = "linux_aarch64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
+config_setting(
+    name = "linux_ppc64le",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:ppc64le",
+    ],
+)
+
+config_setting(
+    name = "linux_x86_64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+config_setting(
+    name = "macos_aarch64",
+    constraint_values = [
+        "@platforms//os:macos",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
+config_setting(
+    name = "macos_x86_64",
+    constraint_values = [
+        "@platforms//os:macos",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+# Feature specific configurations
+config_setting(
+    name = "zkx_has_exception",
+    flag_values = {":has_exception": "true"},
+)
+
+config_setting(
+    name = "zkx_has_intel_openmp",
+    flag_values = {
+        ":has_openmp": "true",
+        ":has_intel_openmp": "true",
+    },
+)
+
+config_setting(
+    name = "zkx_has_openmp",
+    flag_values = {":has_openmp": "true"},
+)
+
+config_setting(
+    name = "zkx_has_openmp_on_macos",
+    constraint_values = [
+        "@platforms//os:macos",
+    ],
+    flag_values = {
+        ":has_openmp": "true",
+    },
+)
+
+version_header(
+    name = "version_generated",
+    lastchange = "@lastchange//:lastchange",
+    major = VERSION_MAJOR,
+    minor = VERSION_MINOR,
+    output = "version_generated.h",
+    patch = VERSION_PATCH,
+    prerelease = VERSION_PRERELEASE,
+    project = "ZKX",
+)

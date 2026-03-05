@@ -1,0 +1,98 @@
+/* Copyright 2019 The OpenXLA Authors.
+Copyright 2025 The ZKX Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+==============================================================================*/
+
+#ifndef ZKX_HLO_TRANSLATE_MHLO_TO_HLO_MLIR_HLO_TO_HLO_H_
+#define ZKX_HLO_TRANSLATE_MHLO_TO_HLO_MLIR_HLO_TO_HLO_H_
+
+#include <memory>
+#include <vector>
+
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "mlir/IR/Block.h"
+#include "mlir/IR/BuiltinOps.h"
+
+#include "zkx/hlo/builder/zkx_builder.h"
+#include "zkx/hlo/ir/hlo_module.h"
+#include "zkx/hlo/translate/mhlo_to_hlo/layout_util.h"
+#include "zkx/service/hlo.pb.h"
+
+namespace mlir {
+
+struct MlirToHloConversionOptions {
+  // Best-effort propagation of the layouts. These layouts serve as performance
+  // hints to the backend.
+  //
+  // Note that non-array shapes are not carrying layouts, and users have to
+  // figure out the proper layouts of them through context. This is one of the
+  // reasons why the attribute-based solution is temporary.
+  //
+  // TODO(timshen): Investigate the necessity of having layouts in MHLO.
+  bool propagate_layouts = false;
+
+  // Propagate the source and result layouts from mhlo bitcast op into the
+  // backend config for the bitcast. This is required for XLA:GPU backend to
+  // use elemental IR emitters for fused bitcasts without propagating layouts.
+  bool propagate_bitcast_layouts_to_backend_config = false;
+
+  LayoutPreferenceFn layout_preference_fn;
+  ShapeRepresentationFn shape_representation_fn;
+
+  // If use_tuple_args is set, then the entry computations's arguments are
+  // converted to a tuple and passed as a single parameter.
+  bool use_tuple_args = false;
+
+  // If return tuple is true, then the entry function's return values
+  // are converted to a tuple even when there is only a single return value.
+  // Multiple return values are always converted to a tuple and returned as a
+  // single value.
+  bool return_tuple = true;
+};
+
+// Prefer `ConvertMlirHloToHloModule` over this method when possible, as it
+// preserves more information and abstracts away the proto. This method is
+// preserved for legacy reasons.
+// TODO (b/345806521): Migrate callsites to ConvertMlirHloToHloModule,
+// and delete this method.
+//
+// Converts a MLIR module in HLO dialect into a HloModuleProto.
+//
+absl::Status ConvertMlirHloToHlo(ModuleOp module, zkx::HloProto* hlo_proto,
+                                 bool use_tuple_args, bool return_tuple,
+                                 MlirToHloConversionOptions options = {});
+
+absl::Status ConvertMlirHloToHlo(ModuleOp module, zkx::HloProto* hlo_proto,
+                                 MlirToHloConversionOptions options);
+
+// Converts a MLIR module in HLO dialect into a HloModule with HloModuleConfig.
+// This method preserves config data stored in MHLO module attributes.
+//
+// See `MlirToHloConversionOptions` for details on conversion flags.
+absl::StatusOr<std::unique_ptr<zkx::HloModule>> ConvertMlirHloToHloModule(
+    ModuleOp module, MlirToHloConversionOptions options = {});
+
+// Transforms a Block into HLO, where the HLO is represented as calls into an
+// ZkxBuilder. Callee functions are allowed in the Block's ancestor ModuleOp.
+// zkx_params are inputs to block. returns are the returned ZkxOps.
+absl::Status BuildHloFromMlirHlo(Block& block, zkx::ZkxBuilder& builder,
+                                 llvm::ArrayRef<zkx::ZkxOp> zkx_params,
+                                 std::vector<zkx::ZkxOp>& returns,
+                                 MlirToHloConversionOptions options = {});
+
+}  // namespace mlir
+
+#endif  // ZKX_HLO_TRANSLATE_MHLO_TO_HLO_MLIR_HLO_TO_HLO_H_

@@ -1,0 +1,414 @@
+# Copyright 2025 The ZKX Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
+load("@rules_cc//cc:defs.bzl", "cc_proto_library")
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("//bazel:zkx_cc.bzl", "zkx_cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+proto_library(
+    name = "device_description_proto",
+    srcs = ["device_description.proto"],
+    deps = [
+        "//zkx:autotune_results_proto",
+        "//zkx/stream_executor/cuda:cuda_compute_capability_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "device_description_cc_proto",
+    deps = [":device_description_proto"],
+)
+
+zkx_cc_library(
+    name = "activate_context",
+    hdrs = ["activate_context.h"],
+    deps = [":namespace_alias"],
+)
+
+zkx_cc_library(
+    name = "allocator_stats",
+    srcs = ["allocator_stats.cc"],
+    hdrs = ["allocator_stats.h"],
+    deps = [
+        ":namespace_alias",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+zkx_cc_library(
+    name = "bit_pattern",
+    srcs = ["bit_pattern.cc"],
+    hdrs = ["bit_pattern.h"],
+    deps = [
+        ":namespace_alias",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+zkx_cc_library(
+    name = "command_buffer",
+    hdrs = ["command_buffer.h"],
+    deps = [
+        ":bit_pattern",
+        ":device_memory",
+        ":kernel",
+        ":launch_dim",
+        "//xla/tsl/lib/gtl:int_type",
+        "//xla/tsl/platform:errors",
+        "@com_google_absl//absl/functional:any_invocable",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+zkx_cc_library(
+    name = "device_description",
+    srcs = ["device_description.cc"],
+    hdrs = ["device_description.h"],
+    deps = [
+        ":device_description_cc_proto",
+        ":launch_dim",
+        ":semantic_version",
+        "//xla/tsl/lib/math:math_util",
+        "//zkx/stream_executor/cuda:cuda_compute_capability",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+zkx_cc_library(
+    name = "device_memory",
+    hdrs = ["device_memory.h"],
+    deps = [
+        ":namespace_alias",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/log:check",
+    ],
+)
+
+zkx_cc_library(
+    name = "device_memory_allocator",
+    hdrs = ["device_memory_allocator.h"],
+    deps = [
+        ":device_memory",
+        ":platform",
+        "//xla/tsl/platform:errors",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+zkx_cc_library(
+    name = "event",
+    hdrs = ["event.h"],
+    deps = [
+        ":namespace_alias",
+        "@com_google_absl//absl/status",
+    ],
+)
+
+zkx_cc_library(
+    name = "event_based_timer",
+    hdrs = ["event_based_timer.h"],
+    deps = [
+        ":namespace_alias",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+zkx_cc_library(
+    name = "executor_cache",
+    srcs = ["executor_cache.cc"],
+    hdrs = ["executor_cache.h"],
+    deps = [
+        ":stream_executor",
+        "//xla/tsl/platform:statusor",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/synchronization",
+    ],
+)
+
+zkx_cc_library(
+    name = "generic_memory_allocation",
+    hdrs = ["generic_memory_allocation.h"],
+    deps = [
+        ":memory_allocation",
+        "@com_google_absl//absl/functional:any_invocable",
+    ],
+)
+
+zkx_cc_library(
+    name = "generic_memory_allocator",
+    hdrs = ["generic_memory_allocator.h"],
+    deps = [
+        ":memory_allocation",
+        ":memory_allocator",
+        "@com_google_absl//absl/functional:any_invocable",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+zkx_cc_library(
+    name = "kernel",
+    srcs = ["kernel.cc"],
+    hdrs = ["kernel.h"],
+    deps = [
+        ":device_memory",
+        ":launch_dim",
+        ":stream",
+        "@com_google_absl//absl/container:inlined_vector",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+zkx_cc_library(
+    name = "kernel_spec",
+    srcs = ["kernel_spec.cc"],
+    hdrs = ["kernel_spec.h"],
+    deps = [
+        ":namespace_alias",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+zkx_cc_library(
+    name = "launch_dim",
+    hdrs = ["launch_dim.h"],
+    deps = [
+        ":namespace_alias",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+zkx_cc_library(
+    name = "memory_allocation",
+    hdrs = ["memory_allocation.h"],
+    deps = [":namespace_alias"],
+)
+
+zkx_cc_library(
+    name = "memory_allocator",
+    hdrs = ["memory_allocator.h"],
+    deps = [
+        ":memory_allocation",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+zkx_cc_library(
+    name = "module_spec",
+    hdrs = ["module_spec.h"],
+    deps = [
+        ":namespace_alias",
+        "@com_google_absl//absl/hash",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+zkx_cc_library(
+    name = "namespace_alias",
+    hdrs = ["namespace_alias.h"],
+    visibility = ["//zkx/stream_executor:__subpackages__"],
+)
+
+zkx_cc_library(
+    name = "platform",
+    srcs = ["platform.cc"],
+    hdrs = ["platform.h"],
+    deps = [
+        ":device_description",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+zkx_cc_library(
+    name = "platform_manager",
+    srcs = ["platform_manager.cc"],
+    hdrs = ["platform_manager.h"],
+    deps = [
+        ":platform",
+        "//xla/tsl/platform:errors",
+        "//xla/tsl/platform:statusor",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/debugging:leak_check",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/synchronization",
+    ],
+)
+
+zkx_cc_library(
+    name = "scoped_module_handle",
+    hdrs = ["scoped_module_handle.h"],
+    deps = [
+        ":module_spec",
+        ":stream_executor",
+    ],
+)
+
+zkx_cc_library(
+    name = "semantic_version",
+    srcs = ["semantic_version.cc"],
+    hdrs = ["semantic_version.h"],
+    deps = [
+        ":namespace_alias",
+        "//xla/tsl/platform:statusor",
+        "@com_google_absl//absl/hash",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+zkx_cc_library(
+    name = "stream",
+    hdrs = ["stream.h"],
+    deps = [
+        ":device_memory",
+        ":event",
+        ":event_based_timer",
+        ":launch_dim",
+        ":platform",
+        "@com_google_absl//absl/functional:any_invocable",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+zkx_cc_library(
+    name = "stream_common",
+    srcs = ["stream_common.cc"],
+    hdrs = ["stream_common.h"],
+    deps = [
+        ":stream",
+        ":stream_executor",
+        "//xla/tsl/platform:statusor",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/synchronization",
+    ],
+)
+
+zkx_cc_library(
+    name = "stream_executor",
+    hdrs = ["stream_executor.h"],
+    deps = [
+        ":activate_context",
+        ":allocator_stats",
+        ":command_buffer",
+        ":device_description",
+        ":device_memory",
+        ":event",
+        ":event_based_timer",
+        ":kernel",
+        ":kernel_spec",
+        ":memory_allocation",
+        ":memory_allocator",
+        ":module_spec",
+        ":platform",
+        ":stream",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+zkx_cc_library(
+    name = "stream_executor_common",
+    srcs = ["stream_executor_common.cc"],
+    hdrs = ["stream_executor_common.h"],
+    deps = [
+        ":platform",
+        ":stream_executor",
+        "//xla/tsl/util:env_var",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/synchronization",
+    ],
+)
+
+zkx_cc_library(
+    name = "stream_executor_memory_allocator",
+    srcs = ["stream_executor_memory_allocator.cc"],
+    hdrs = ["stream_executor_memory_allocator.h"],
+    deps = [
+        ":device_memory",
+        ":device_memory_allocator",
+        ":platform",
+        ":stream",
+        ":stream_executor",
+        "//xla/tsl/platform:numbers",
+        "//xla/tsl/platform:statusor",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+zkx_cc_library(
+    name = "trace_command_buffer_factory",
+    srcs = ["trace_command_buffer_factory.cc"],
+    hdrs = ["trace_command_buffer_factory.h"],
+    deps = [
+        ":command_buffer",
+        ":stream",
+        ":stream_executor",
+        "@com_google_absl//absl/functional:any_invocable",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+zkx_cc_library(
+    name = "typed_kernel_factory",
+    hdrs = ["typed_kernel_factory.h"],
+    deps = [
+        ":kernel",
+        ":kernel_spec",
+        ":stream_executor",
+        "//xla/tsl/platform:statusor",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
+    ],
+)

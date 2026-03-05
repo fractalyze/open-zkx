@@ -1,0 +1,78 @@
+/* Copyright 2024 The OpenXLA Authors.
+Copyright 2025 The ZKX Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+==============================================================================*/
+
+#include <sstream>
+
+#include "llvm/ADT/SmallVector.h"
+
+#include "zkx/codegen/emitters/ir/zkx_ops.h"
+#include "zkx/hlo/analysis/indexing_map.h"
+#include "zkx/hlo/analysis/indexing_map_serialization.h"
+
+namespace zkx {
+
+// static
+mlir::Attribute IndexingMapAttr::parse(mlir::AsmParser& parser, mlir::Type) {
+  if (failed(parser.parseLess())) {
+    return {};
+  }
+  auto indexing_map = parseChainOfStringsAsIndexingMap(parser);
+  if (!indexing_map.has_value() || failed(parser.parseGreater())) {
+    return {};
+  }
+  return IndexingMapAttr::get(parser.getContext(), *indexing_map);
+}
+
+void IndexingMapAttr::print(mlir::AsmPrinter& printer) const {
+  printer << "<\"" << ToString(getIndexingMap()) << "\">";
+}
+
+// static
+IndexingMapAttr IndexingMapAttr::get(mlir::MLIRContext* context,
+                                     const IndexingMap& indexing_map) {
+  llvm::SmallVector<std::pair<mlir::AffineExpr, Interval>> constraints;
+  for (auto& constraint : indexing_map.GetConstraints()) {
+    constraints.push_back({constraint.first, constraint.second});
+  }
+  return get(context, indexing_map.GetAffineMap(), indexing_map.GetDimVars(),
+             indexing_map.GetRangeVars(), constraints);
+}
+
+// static
+mlir::LogicalResult IndexingMapAttr::verify(
+    mlir::function_ref<mlir::InFlightDiagnostic()> emitError,
+    mlir::AffineMap map, mlir::ArrayRef<IndexingMap::Variable> dim_vars,
+    mlir::ArrayRef<IndexingMap::Variable> range_vars,
+    mlir::ArrayRef<std::pair<mlir::AffineExpr, Interval>> constraints) {
+  auto indexing_map =
+      IndexingMap(map, dim_vars, range_vars, /*rt_vars=*/{}, constraints);
+  std::stringstream ss;
+  if (!indexing_map.Verify(ss)) {
+    return emitError() << ss.str();
+  }
+  return mlir::success();
+}
+
+IndexingMap IndexingMapAttr::getIndexingMap() const {
+  return IndexingMap(getMap(), getDimVars(), getRangeVars(), /*rt_vars=*/{},
+                     getConstraints());
+}
+
+int64_t IndexingMapAttr::getNumResults() const {
+  return getMap().getNumResults();
+}
+
+}  // namespace zkx

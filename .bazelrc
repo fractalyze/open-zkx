@@ -1,0 +1,118 @@
+# For projects which use zkx as part of a Bazel build process, putting
+# nothing in a bazelrc will default to a monolithic build. The following line
+# opts in to modular op registration support by default.
+build -c opt
+
+# Make Bazel print out all options from rc files.
+build --announce_rc
+
+# Enable platform specific configurations by default depending on host machine.
+common --enable_platform_specific_config
+
+build:macos_x86_64 --config=macos
+build:macos_x86_64 --cpu=darwin_x86_64
+build:macos_x86_64 --host_cpu=darwin_x86_64
+build:macos_arm64 --config=macos
+build:macos_arm64 --cpu=darwin_arm64
+build:macos_arm64 --host_cpu=darwin_arm64
+
+# Fastbuild config
+build:fastbuild -c fastbuild
+
+# Debug config
+build:dbg -c dbg
+
+# Opt config
+build:opt -c opt
+
+# By default, build zkx in C++ 17 mode.
+build:linux --cxxopt=-std=c++17
+build:linux --host_cxxopt=-std=c++17
+build:macos --cxxopt=-std=c++17
+build:macos --host_cxxopt=-std=c++17
+build:macos --objccopt=-std=c++17
+build:windows --cxxopt=/std:c++17
+build:windows --host_cxxopt=/std:c++17
+
+# Instruction set optimizations
+build:avx_linux --copt=-mavx
+build:avx2_linux --copt=-mavx2
+build:avx512_linux --copt=-mavx512f
+build:avx_windows --copt=/arch=AVX
+build:avx2_windows --copt=/arch=AVX2
+build:avx512_windows --copt=/arch=AVX512
+
+# CUDA: This config refers to building CUDA op kernels with nvcc.
+build:cuda --repo_env TF_NEED_CUDA=1
+build:cuda --crosstool_top=@local_config_cuda//crosstool:toolchain
+build:cuda --@local_config_cuda//:enable_cuda
+# Default CUDA and CUDNN versions.
+build:cuda --repo_env=HERMETIC_CUDA_VERSION="12.9.1"
+build:cuda --repo_env=HERMETIC_CUDNN_VERSION="9.8.0"
+# This flag is needed to include CUDA libraries.
+build:cuda --@local_config_cuda//cuda:include_cuda_libs=true
+
+# This configuration is used for building the wheels.
+build:cuda_wheel --@local_config_cuda//cuda:include_cuda_libs=false
+
+# CUDA: This config refers to building CUDA op kernels with clang.
+build:cuda_clang --config=cuda
+build:cuda_clang --@local_config_cuda//:cuda_compiler=clang
+build:cuda_clang --copt=-Qunused-arguments
+# Select supported compute capabilities (supported graphics cards).
+# This is the same as the official TensorFlow builds.
+# See https://developer.nvidia.com/cuda-gpus#compute
+# `compute_XY` enables PTX embedding in addition to SASS. PTX
+# is forward compatible beyond the current compute capability major
+# release while SASS is only forward compatible inside the current
+# major release. Example: sm_80 kernels can run on sm_89 GPUs but
+# not on sm_90 GPUs. compute_80 kernels though can also run on sm_90 GPUs.
+build:cuda_clang --repo_env=HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_60,sm_70,sm_80,sm_89,sm_120,compute_90"
+# Permit newer CUDA versions than Clang is aware of
+build:cuda_clang --copt="-Wno-unknown-cuda-version"
+# Set lld as the linker.
+build:cuda_clang --host_linkopt="-fuse-ld=lld"
+build:cuda_clang --host_linkopt="-lm"
+build:cuda_clang --linkopt="-fuse-ld=lld"
+build:cuda_clang --linkopt="-lm"
+
+# Set up compilation CUDA version and paths and use the CUDA Clang toolchain.
+build:cuda_clang_official --config=cuda_clang
+build:cuda_clang_official --action_env=CLANG_CUDA_COMPILER_PATH="/usr/lib/llvm-20/bin/clang"
+
+# Build with nvcc for CUDA and clang for host
+build:cuda_nvcc --config=cuda
+build:cuda_nvcc --action_env=TF_NVCC_CLANG="1"
+build:cuda_nvcc --@local_config_cuda//:cuda_compiler=nvcc
+# Old config for backward compatibility
+build:nvcc_clang --config=cuda_nvcc
+
+# Compile for the native architecture
+# WARN(batzor): this will make the build non-portable
+build:native --copt=-march=native
+
+# NOTE(chokobole): pjrt needs exception.
+build --//:has_exception
+
+# NOTE(chokobole): This is required to avoid an error.
+# /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.4.sdk/usr/include/_stdio.h:318:7: error: expected identifier or '('
+#   318 | FILE    *fdopen(int, const char *) __DARWIN_ALIAS_STARTING(__MAC_10_6, __IPHONE_2_0, __DARWIN_ALIAS(fdopen));
+#       |          ^
+# external/zlib/zutil.h:147:33: note: expanded from macro 'fdopen'
+#   147 | #        define fdopen(fd,mode) NULL /* No fdopen() */
+#       |                                 ^
+# /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/17/include/__stddef_null.h:26:16: note: expanded from macro 'NULL'
+#    26 | #define NULL ((void*)0)
+build --noenable_bzlmod
+
+build --build_tag_filters -cuda_only,-gpu
+build --test_tag_filters -cuda_only,-gpu
+
+build:cuda --build_tag_filters=""
+build:cuda --test_tag_filters=""
+
+# defaults are: 60,300,900,3600
+test:ci --test_timeout=300,600,1800,-1
+
+# Load rc file with user-specific options.
+try-import %workspace%/.bazelrc.user

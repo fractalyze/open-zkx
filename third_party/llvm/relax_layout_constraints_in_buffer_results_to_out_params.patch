@@ -1,0 +1,26 @@
+diff --git a/mlir/lib/Dialect/Bufferization/Transforms/BufferResultsToOutParams.cpp b/mlir/lib/Dialect/Bufferization/Transforms/BufferResultsToOutParams.cpp
+index acf5f7767d12..263420ba5291 100644
+--- a/mlir/lib/Dialect/Bufferization/Transforms/BufferResultsToOutParams.cpp
++++ b/mlir/lib/Dialect/Bufferization/Transforms/BufferResultsToOutParams.cpp
+@@ -60,6 +60,14 @@ updateFuncOp(func::FuncOp func,
+   BitVector erasedResultIndices(functionType.getNumResults());
+   for (const auto &resultType : llvm::enumerate(functionType.getResults())) {
+     if (auto memrefType = dyn_cast<MemRefType>(resultType.value())) {
++      // In standard MLIR, only identity or fully dynamic layouts are allowed
++      // here because `updateCalls` must be able to safely cast and pass
++      // buffers. However, in ZKX, memory management at function boundaries is
++      // handled internally by the ZKX runtime. Since we don't rely on
++      // `updateCalls` to manage these call sites, we can support StridedLayouts
++      // by only updating the function signature and return ops.
++      /*
+       if (!hasStaticIdentityLayout(memrefType) &&
+           !hasFullyDynamicLayoutMap(memrefType)) {
+         // Only buffers with static identity layout can be allocated. These can
+@@ -68,6 +76,7 @@ updateFuncOp(func::FuncOp func,
+         return func->emitError()
+                << "cannot create out param for result with unsupported layout";
+       }
++      */
+       erasedResultIndices.set(resultType.index());
+       erasedResultTypes.push_back(memrefType);
+     }

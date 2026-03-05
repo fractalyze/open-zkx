@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package zkx;
+
+// Defines generic pass stats.
+message KeyValueMetric {
+  string key = 1;
+  int64 value = 2;
+}

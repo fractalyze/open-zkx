@@ -1,0 +1,230 @@
+/* Copyright 2023 The OpenXLA Authors.
+Copyright 2026 The ZKX Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+==============================================================================*/
+
+#include "zkx/backends/gpu/runtime/command_buffer_cmd_emitter.h"
+
+#include <memory>
+#include <utility>
+#include <vector>
+
+#include "absl/container/inlined_vector.h"
+#include "absl/status/status.h"
+
+#include "xla/tsl/platform/errors.h"
+#include "zkx/backends/gpu/runtime/conditional_thunk.h"
+#include "zkx/backends/gpu/runtime/dynamic_slice_thunk.h"
+#include "zkx/backends/gpu/runtime/kernel_thunk.h"
+#include "zkx/backends/gpu/runtime/memset_thunk.h"
+#include "zkx/backends/gpu/runtime/sequential_thunk.h"
+#include "zkx/backends/gpu/runtime/wait_for_streams_thunk.h"
+#include "zkx/backends/gpu/runtime/while_thunk.h"
+#include "zkx/runtime/buffer_use.h"
+
+namespace zkx::gpu {
+
+namespace {
+// Appends command(s) converted from `thunk` to `cmd_sequence`.
+absl::Status AppendCommands(
+    CommandBufferCmdSequence& cmd_sequence, const Thunk& thunk,
+    CommandBufferCmdSequence::SynchronizationMode synchronization_mode);
+
+// Appends command(s) converted from `sequence` to `cmd_sequence`.
+absl::Status AppendCommands(
+    CommandBufferCmdSequence& cmd_sequence, const ThunkSequence& sequence,
+    CommandBufferCmdSequence::SynchronizationMode synchronization_mode);
+
+//===----------------------------------------------------------------------===//
+// Conversions from Thunk to Command
+//===----------------------------------------------------------------------===//
+
+using Command = std::unique_ptr<CommandBufferCmd>;
+using zkx::BufferUse;
+
+auto ArgsAccess(const std::vector<bool>& written) {
+  absl::InlinedVector<BufferUse::MemoryAccess, 4> args_access;
+  args_access.reserve(written.size());
+  for (bool w : written) {
+    args_access.push_back(w ? BufferUse::MemoryAccess::kWrite
+                            : BufferUse::MemoryAccess::kRead);
+  }
+  return args_access;
+}
+
+absl::StatusOr<Command> Convert(const KernelThunk& thunk) {
+  return std::make_unique<LaunchCmd>(
+      thunk.execution_stream_id(), thunk.kernel_name(), thunk.arguments(),
+      ArgsAccess(thunk.written()), thunk.launch_dimensions(),
+      thunk.shmem_bytes());
+}
+
+absl::StatusOr<Command> Convert(const MemzeroThunk& thunk) {
+  return std::make_unique<MemzeroCmd>(thunk.execution_stream_id(),
+                                      thunk.destination());
+}
+
+absl::StatusOr<Command> Convert(const Memset32BitValueThunk& thunk) {
+  return std::make_unique<Memset32Cmd>(thunk.execution_stream_id(),
+                                       thunk.destination(), thunk.value());
+}
+
+absl::StatusOr<Command> Convert(
+    const WhileThunk& thunk,
+    CommandBufferCmdSequence::SynchronizationMode synchronization_mode) {
+  TF_ASSIGN_OR_RETURN(
+      CommandBufferCmdSequence cond_cmds,
+      ConvertToCommands(thunk.condition_thunk_sequence()->thunks(),
+                        synchronization_mode));
+  TF_ASSIGN_OR_RETURN(CommandBufferCmdSequence body_cmds,
+                      ConvertToCommands(thunk.body_thunk_sequence()->thunks(),
+                                        synchronization_mode));
+  return std::make_unique<WhileCmd>(thunk.execution_stream_id(),
+                                    thunk.condition_result_buffer(),
+                                    std::move(cond_cmds), std::move(body_cmds));
+}
+
+absl::StatusOr<Command> Convert(
+    const ConditionalThunk& thunk,
+    CommandBufferCmdSequence::SynchronizationMode synchronization_mode) {
+  std::vector<CommandBufferCmdSequence> branch_cmds;
+  branch_cmds.reserve(thunk.branch_thunks().size());
+  for (auto& branch_thunk : thunk.branch_thunks()) {
+    TF_ASSIGN_OR_RETURN(
+        CommandBufferCmdSequence cmds,
+        ConvertToCommands(branch_thunk->thunks(), synchronization_mode));
+    branch_cmds.emplace_back(std::move(cmds));
+  }
+  return std::make_unique<CaseCmd>(thunk.execution_stream_id(),
+                                   thunk.branch_index_buffer(),
+                                   std::move(branch_cmds));
+}
+
+absl::StatusOr<Command> Convert(const DynamicSliceThunk& thunk) {
+  auto cmd_sequence = std::make_unique<CommandBufferCmdSequence>();
+  auto embed_thunk = thunk.get_embedded_thunk();
+  TF_RETURN_IF_ERROR(AppendCommands(
+      *cmd_sequence, embed_thunk->thunks(),
+      CommandBufferCmdSequence::SynchronizationMode::kAutomatic));
+
+  auto& thunk_fake_allocations = thunk.get_fake_allocations();
+  std::vector<std::unique_ptr<BufferAllocation>> fake_allocations;
+  for (auto it = thunk_fake_allocations.begin();
+       it != thunk_fake_allocations.end(); ++it) {
+    fake_allocations.push_back(std::make_unique<BufferAllocation>(**it));
+  }
+  return std::make_unique<DynamicSliceFusionCmd>(
+      thunk.execution_stream_id(), std::move(cmd_sequence),
+      thunk.get_arguments(), std::move(fake_allocations), thunk.get_offsets(),
+      thunk.get_orig_shapes(), thunk.get_sliced_shapes(),
+      thunk.get_offset_byte_sizes());
+}
+
+absl::StatusOr<Command> Convert(const WaitForStreamsThunk& thunk) {
+  return std::make_unique<BarrierCmd>(thunk.stream_id(),
+                                      thunk.wait_for_stream_id());
+}
+
+//===----------------------------------------------------------------------===//
+absl::StatusOr<Command> CopyMetadata(absl::StatusOr<Command> cmd,
+                                     const Thunk& thunk) {
+  if (cmd.ok()) {
+    (*cmd)->set_profile_annotation(thunk.profile_annotation());
+    return cmd;
+  }
+  return cmd;
+}
+
+template <typename ThunkType>
+absl::StatusOr<Command> Convert(const Thunk& thunk) {
+  return CopyMetadata(Convert(static_cast<const ThunkType&>(thunk)), thunk);
+}
+
+template <typename ThunkType>
+absl::StatusOr<Command> Convert(
+    const Thunk& thunk,
+    CommandBufferCmdSequence::SynchronizationMode synchronization_mode) {
+  return Convert(static_cast<const ThunkType&>(thunk), synchronization_mode);
+}
+
+absl::Status AppendCommands(
+    CommandBufferCmdSequence& cmd_sequence, const Thunk& thunk,
+    CommandBufferCmdSequence::SynchronizationMode synchronization_mode) {
+  auto append = [&](absl::StatusOr<Command> command) -> absl::Status {
+    if (command.ok()) {
+      cmd_sequence.Append(std::move(*command));
+      return absl::OkStatus();
+    }
+    return command.status();
+  };
+
+  switch (thunk.kind()) {
+    case Thunk::Kind::kConditional:
+      return append(Convert<ConditionalThunk>(thunk, synchronization_mode));
+    case Thunk::Kind::kKernel:
+      return append(Convert<KernelThunk>(thunk));
+    case Thunk::Kind::kMemset32BitValue:
+      return append(Convert<Memset32BitValueThunk>(thunk));
+    case Thunk::Kind::kMemzero:
+      return append(Convert<MemzeroThunk>(thunk));
+    case Thunk::Kind::kWhile:
+      return append(Convert<WhileThunk>(thunk, synchronization_mode));
+
+    // Sequential thunk does not have any special semantics and we simply inline
+    // all nested thunks into command buffer.
+    case Thunk::Kind::kSequential:
+      return AppendCommands(cmd_sequence,
+                            static_cast<const SequentialThunk&>(thunk).thunks(),
+                            synchronization_mode);
+
+    case Thunk::Kind::kDynamicSlice:
+      return append(Convert<DynamicSliceThunk>(thunk));
+
+    case Thunk::Kind::kWaitForStreams:
+      return append(Convert<WaitForStreamsThunk>(thunk));
+
+    case Thunk::Kind::kCommandBuffer:
+      return absl::InternalError(
+          "Error trying to emit command for a CommandBufferThunk. Input HLO "
+          "must already contain command buffers and ZKX should not run command "
+          "buffer scheduling pass the second time. It it happens in the test, "
+          "try explicitly disabling command buffers in tested HLO module.");
+
+    default:
+      return absl::InternalError(absl::StrFormat(
+          "Unsupported thunk kind: %s", Thunk::KindToString(thunk.kind())));
+  }
+}
+
+absl::Status AppendCommands(
+    CommandBufferCmdSequence& cmd_sequence, const ThunkSequence& sequence,
+    CommandBufferCmdSequence::SynchronizationMode synchronization_mode) {
+  for (const std::unique_ptr<Thunk>& thunk : sequence)
+    TF_RETURN_IF_ERROR(
+        AppendCommands(cmd_sequence, *thunk, synchronization_mode));
+  return absl::OkStatus();
+}
+}  // namespace
+
+// TODO(vuson): Add unit tests.
+absl::StatusOr<CommandBufferCmdSequence> ConvertToCommands(
+    const ThunkSequence& sequence,
+    CommandBufferCmdSequence::SynchronizationMode synchronization_mode) {
+  CommandBufferCmdSequence cmd_sequence(synchronization_mode);
+  TF_RETURN_IF_ERROR(
+      AppendCommands(cmd_sequence, sequence, synchronization_mode));
+  return cmd_sequence;
+}
+
+}  // namespace zkx::gpu

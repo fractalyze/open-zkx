@@ -1,0 +1,7 @@
+exports_files(glob(["*.stablehlo.mlir"]))
+
+filegroup(
+    name = "mlir_files",
+    srcs = glob(["*.stablehlo.mlir"]),
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,63 @@
+# Copyright 2025 The ZKX Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
+load("//bazel:zkx_cc.bzl", "zkx_cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+zkx_cc_library(
+    name = "fusion_emitter",
+    srcs = ["fusion_emitter.cc"],
+    hdrs = ["fusion_emitter.h"],
+    deps = [
+        "//zkx:shape_util",
+        "//zkx:status_macros",
+        "//zkx:util",
+        "//zkx/backends/gpu/runtime:thunk",
+        "//zkx/hlo/analysis:indexing_map",
+        "//zkx/hlo/ir:hlo",
+        "//zkx/service/gpu:ir_emitter_context",
+        "//zkx/service/gpu:launch_dimensions",
+        "//zkx/service/llvm_ir:llvm_util",
+        "//zkx/stream_executor:device_description",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@llvm-project//llvm:Core",
+        "@llvm-project//mlir:IR",
+    ],
+)
+
+zkx_cc_library(
+    name = "fusions",
+    srcs = ["fusions.cc"],
+    hdrs = ["fusions.h"],
+    deps = [
+        ":fusion_emitter",
+        "//zkx:shape_util",
+        "//zkx/backends/gpu/codegen/emitters:concatenate",
+        "//zkx/backends/gpu/codegen/emitters:in_place_dynamic_update_slice",
+        "//zkx/backends/gpu/codegen/emitters:loop",
+        "//zkx/backends/gpu/codegen/emitters:reduction",
+        "//zkx/backends/gpu/codegen/emitters:scatter",
+        "//zkx/backends/gpu/codegen/emitters:transpose",
+        "//zkx/hlo/ir:hlo",
+        "//zkx/service:buffer_assignment",
+        "//zkx/service/gpu:hlo_fusion_analysis",
+        "//zkx/service/gpu:ir_emission_utils",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+    ],
+)

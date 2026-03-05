@@ -1,0 +1,7 @@
+build:ci --remote_cache=grpc://127.0.0.1:9092
+build:ci --action_env=CC=/usr/bin/clang-20
+build:ci --action_env=CXX=/usr/bin/clang++-20
+build:ci --action_env=LOCAL_CUDA_PATH=/usr/local/cuda-12.9
+build:ci --features=-header_modules --features=-module_maps
+build:ci --host_features=-header_modules --host_features=-module_maps
+test:ci --test_output=errors

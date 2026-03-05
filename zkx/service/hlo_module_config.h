@@ -1,0 +1,373 @@
+/* Copyright 2017 The OpenXLA Authors.
+Copyright 2025 The ZKX Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+==============================================================================*/
+
+#ifndef ZKX_SERVICE_HLO_MODULE_CONFIG_H_
+#define ZKX_SERVICE_HLO_MODULE_CONFIG_H_
+
+#include <stdint.h>
+
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "absl/container/flat_hash_map.h"
+#include "absl/container/inlined_vector.h"
+#include "absl/log/check.h"
+#include "absl/log/log.h"
+#include "absl/status/statusor.h"
+#include "absl/types/span.h"
+
+#include "zkx/service/computation_layout.h"
+#include "zkx/shape_util.h"
+#include "zkx/zkx.pb.h"
+
+namespace zkx {
+
+enum class FusionConfigCollection {
+  kOff,      // Do not collect configuration.
+  kPerEdge,  // Collect per-edge configuration.
+  kPerNode,  // Collect per-node configuration.
+};
+
+// This class gathers all settings and values which affect the compiled
+// executable outside of the HLO code itself. This include layouts of inputs and
+// outputs to the module and settings such as HLO profiling. Together the
+// HloModule and HloModuleConfig unambiguously determine a particular
+// executable.
+class HloModuleConfig {
+ public:
+  // A configuration can be created either with, or without an entry
+  // ComputationLayout. The default ctor creates it without -- in this case
+  // accessing entry_computation_layout will CHECK-fail. The ctor accepting a
+  // ProgramShape creates a computation layout using this shape.
+  // The layouts in the ProgramShape will be reset to default unless
+  // ignore_layouts is set to false.
+  HloModuleConfig();
+
+  explicit HloModuleConfig(const ProgramShape& program_shape,
+                           bool ignore_layouts = true)
+      : entry_computation_layout_(
+            ComputationLayout(program_shape, ignore_layouts)) {}
+
+  explicit HloModuleConfig(ComputationLayout entry_computation_layout)
+      : entry_computation_layout_(std::move(entry_computation_layout)) {}
+
+  // Convert an HloModuleConfig to or from a proto.
+  HloModuleConfigProto ToProto() const;
+  static absl::StatusOr<std::unique_ptr<HloModuleConfig>> CreateFromProto(
+      const HloModuleConfigProto& proto);
+
+  // Checks if this config has an entry computation layout already.
+  bool has_entry_computation_layout() const {
+    return entry_computation_layout_.has_value();
+  }
+
+  // Sets the entry_computation_layout's parameter and result shapes for this
+  // config, according to the given program shape. The parameters and result
+  // are set to default layout.
+  void SetDefaultComputationLayout(const ProgramShape& program_shape) {
+    entry_computation_layout_ = ComputationLayout(program_shape);
+  }
+
+  // Same as above but if the given program contains layout for parameters or
+  // result, the entry_computation_layout's layout is updated accordingly.
+  void SetComputationLayoutIfExists(const ProgramShape& program_shape) {
+    entry_computation_layout_ = ComputationLayout(program_shape,
+                                                  /*ignore_layouts=*/false);
+  }
+
+  // Returns a constant reference to the layout of the entry computation.
+  // Assumes the layout was set.
+  const ComputationLayout& entry_computation_layout() const {
+    CHECK(entry_computation_layout_.has_value());
+    return *entry_computation_layout_;
+  }
+
+  // Returns a mutable pointer to the layout of the entry computation.
+  // Assumes the layout was set.
+  ComputationLayout* mutable_entry_computation_layout() {
+    CHECK(entry_computation_layout_.has_value());
+    return &(*entry_computation_layout_);
+  }
+
+  // Clears the entry computation layout.
+  void clear_entry_computation_layout() {
+    entry_computation_layout_ = std::nullopt;
+  }
+
+  // Returns whether to enable HLO-level profiling.
+  bool hlo_profiling_enabled() const {
+    return debug_options_.zkx_hlo_profile();
+  }
+
+  // clang-format off
+  void set_seed(uint64_t seed) { seed_ = seed; }
+  uint64_t seed() const { return seed_; }
+
+  // Set the launch id of the program. Launch id identifies a set of programs
+  // that should be launched together.
+  void set_launch_id(uint64_t launch_id) { launch_id_ = launch_id; }
+  int32_t launch_id() const { return launch_id_; }
+
+  void set_replica_count(int64_t replica_count) {
+    replica_count_ = replica_count;
+  }
+  int64_t replica_count() const { return replica_count_; }
+
+  void set_num_partitions(int64_t num_partitions) {
+    num_partitions_ = num_partitions;
+  }
+  int64_t num_partitions() const { return num_partitions_; }
+
+  const std::vector<bool>& param_requires_broadcast_via_collectives() const {
+    return param_requires_broadcast_via_collectives_;
+  }
+  void set_param_requires_broadcast_via_collectives(
+      std::vector<bool> require_broadcast) {
+    param_requires_broadcast_via_collectives_ = std::move(require_broadcast);
+  }
+
+  void set_exec_time_optimization_effort(float exec_time_optimization_effort) {
+    exec_time_optimization_effort_ = exec_time_optimization_effort;
+  }
+  float exec_time_optimization_effort() const {
+    return exec_time_optimization_effort_;
+  }
+
+  void set_memory_fitting_effort(float memory_fitting_effort) {
+    memory_fitting_effort_ = memory_fitting_effort;
+  }
+  float memory_fitting_effort() const { return memory_fitting_effort_; }
+
+  // If enabled, deduplicate equivalent hlos into function calls to reduce code
+  // size.
+  void set_deduplicate_hlo(bool deduplicate_hlo) {
+    deduplicate_hlo_ = deduplicate_hlo;
+  }
+  bool deduplicate_hlo() const { return deduplicate_hlo_; }
+
+  void set_device_type(const std::string& device_type) {
+    device_type_ = device_type;
+  }
+  std::string_view device_type() const { return device_type_; }
+
+  // Return a string which unambiguously represents all the fields of this data
+  // structure. Used for generating a cache key for storing the compiled
+  // executable.
+  std::string compilation_cache_key() const;
+
+  const DebugOptions& debug_options() const { return debug_options_; }
+  DebugOptions& mutable_debug_options() { return debug_options_; }
+  void set_debug_options(const DebugOptions& debug_options) {
+    debug_options_ = debug_options;
+  }
+
+  // Sets/returns the number of intra op threads for this module.
+  void set_intra_op_parallelism_threads(
+      const int intra_op_parallelism_threads) {
+    intra_op_parallelism_threads_ = intra_op_parallelism_threads;
+  }
+  int64_t intra_op_parallelism_threads() const {
+    return intra_op_parallelism_threads_;
+  }
+
+  // Whether input and output buffers are aliased if the associated parameter is
+  // passed-through ZKX modules without being changed.
+  bool alias_passthrough_params() const { return alias_passthrough_params_; }
+  void set_alias_passthrough_params(bool alias_passthrough_params) {
+    alias_passthrough_params_ = alias_passthrough_params;
+  }
+
+  bool content_aware_computation_sorting() const {
+    return content_aware_computation_sorting_;
+  }
+  void set_content_aware_computation_sorting(
+      bool content_aware_computation_sorting) {
+    content_aware_computation_sorting_ = content_aware_computation_sorting;
+  }
+
+  FusionConfigCollection fusion_config_collection() const {
+    return fusion_config_collection_;
+  }
+  void set_fusion_config_collection(
+      FusionConfigCollection fusion_config_collection) {
+    fusion_config_collection_ = fusion_config_collection;
+  }
+
+  const std::vector<std::vector<bool>>& fusion_config() const {
+    return fusion_config_;
+  }
+  void set_fusion_config(std::vector<std::vector<bool>> fusion_config) {
+    fusion_config_ = std::move(fusion_config);
+  }
+  std::vector<std::vector<bool>>& mutable_fusion_config() {
+    return fusion_config_;
+  }
+
+  const absl::flat_hash_map<std::string, std::vector<int64_t>>& dot_config()
+      const {
+    return dot_config_;
+  }
+  absl::flat_hash_map<std::string, std::vector<int64_t>>* mutable_dot_config() {
+    return &dot_config_;
+  }
+
+  const std::vector<std::vector<std::vector<int64_t>>>& layout_config() const {
+    return layout_config_;
+  }
+  std::vector<std::vector<std::vector<int64_t>>>* mutable_layout_config() {
+    return &layout_config_;
+  }
+
+  const std::vector<std::vector<bool>>& phase_ordering_config() const {
+    return phase_ordering_config_;
+  }
+  void set_phase_ordering_config(
+      std::vector<std::vector<bool>> phase_ordering_config) {
+    phase_ordering_config_ = std::move(phase_ordering_config);
+  }
+  std::vector<std::vector<bool>>& mutable_phase_ordering_config() {
+    return phase_ordering_config_;
+  }
+
+  int phase_index() const { return phase_index_; }
+  void set_phase_index(const int phase_index) { phase_index_ = phase_index; }
+
+  const std::vector<uint64_t>& memory_space_assignment_config() const {
+    return memory_space_assignment_config_;
+  }
+  std::vector<uint64_t>* mutable_memory_space_assignment_config() {
+    return &memory_space_assignment_config_;
+  }
+
+  int64_t GetAnalysisAllowance(std::string_view pass_name) const {
+    auto it = analysis_allowance_map_.find(pass_name);
+    if (it == analysis_allowance_map_.end()) {
+      return -1;
+    }
+    return (*it).second;
+  }
+  void SetAnalysisAllowance(std::string_view pass_name, int64_t allowance) {
+    analysis_allowance_map_[pass_name] = allowance;
+  }
+
+  int64_t device_memory_size() const { return device_memory_size_; }
+  void set_device_memory_size(int64_t device_memory_size) {
+    device_memory_size_ = device_memory_size;
+  }
+
+  bool use_shardy_partitioner() const { return use_shardy_partitioner_; }
+  void set_use_shardy_partitioner(bool use_shardy_partitioner) {
+    use_shardy_partitioner_ = use_shardy_partitioner;
+  }
+
+ private:
+  // If you add new members, be sure to update compilation_cache_key and the
+  // HloModuleConfigProto.
+  std::optional<ComputationLayout> entry_computation_layout_;
+
+  // Module/graph-level seed handle.
+  uint64_t seed_ = 0;
+
+  // Program id that identifies a set of program to be launched together.
+  int32_t launch_id_ = 0;
+
+  // The number of replicas (data parallelism) to compile this binary for.
+  int64_t replica_count_ = 1;
+
+  // The number of partitions (model parallelism) to compile this binary for.
+  int64_t num_partitions_ = 1;
+
+  // Whether to broadcast args across all replicas. One entry per arg.
+  std::vector<bool> param_requires_broadcast_via_collectives_;
+
+  // The amount of effort to spend on optimizing for minimizing program
+  // execution time, as a value in [-1.0, +1.0]. The baseline is 0.0, which
+  // strongly prioritizes execution time at the cost of longer compile times,
+  // suitable for production workloads. A value of -0.5 would be appropriate for
+  // research use cases that prefer faster compilations to iterate more quickly.
+  // Positive values, on the other hand, might enable costly optimizations that
+  // are off by default.
+  float exec_time_optimization_effort_ = 0.0f;
+
+  // The amount of effort to spend on making the program fit in memory (where
+  // "fit in memory" here has a backend-dependent meaning), as a value in [-1.0,
+  // +1.0]. The baseline is 0.0, which expends significant effort on attempting
+  // to make the program fit. A value of -1.0 would be appropriate for use cases
+  // that wish to spend minimal effort here and fail as quickly as possible
+  // instead. Positive values, on the other hand, might enable costly algorithms
+  // to reduce memory usage that are off by default.
+  float memory_fitting_effort_ = 0.0f;
+
+  // If enabled, deduplicate equivalent hlos into function calls to reduce code
+  // size.
+  bool deduplicate_hlo_ = false;
+
+  // The target maximum parallelism at which to partition HLOs for parallel
+  // execution on the CPU backend.
+  int64_t intra_op_parallelism_threads_ = -1;
+
+  std::string device_type_;
+
+  DebugOptions debug_options_;
+
+  bool alias_passthrough_params_ = false;
+
+  bool content_aware_computation_sorting_ = false;
+
+  FusionConfigCollection fusion_config_collection_ =
+      FusionConfigCollection::kOff;
+
+  // Custom fusion configuration, where fusion_config_[c][v] control if node v
+  // in computation c must be fused to all its consumers (true) or not (false).
+  std::vector<std::vector<bool>> fusion_config_;
+
+  // Custom dot canonicalization configuration, where dot_config_[v] control
+  // how to convert dot operation named 'v' to convolution.
+  absl::flat_hash_map<std::string, std::vector<int64_t>> dot_config_;
+
+  // Layout configuration, where layout_config_[v][i] controls the layout
+  // decision i of operation v.
+  std::vector<std::vector<std::vector<int64_t>>> layout_config_;
+
+  // Memory Space Assignment configuration, where
+  // memory_space_assignment_config_ controls the order of buffer intervals
+  // of this hlo module.
+  std::vector<uint64_t> memory_space_assignment_config_;
+
+  // Phase ordering configuration, where phase_ordering_config[v][i] controls
+  // whether a specific pass with index i (e.g. 0 = DCE, 1 = CSE, etc.) is
+  // inserted after pass v in pipeline. See tuning::PhaseOrderingConfig for
+  // details on what indices (i) correspond to which passes.
+  std::vector<std::vector<bool>> phase_ordering_config_;
+  // Index (v) corresponding to current passes being added for phase ordering.
+  // This is the variable that stores state to allow us to use the same
+  // config across functions during compilation.
+  int phase_index_ = 0;
+
+  // Each Hlo analysis is allowed at least a constant number of
+  // abstract cost units, before it is considered for early termination.
+  absl::flat_hash_map<std::string, int64_t> analysis_allowance_map_;
+
+  int64_t device_memory_size_ = 0;
+
+  bool use_shardy_partitioner_ = false;
+};
+
+}  // namespace zkx
+
+#endif  // ZKX_SERVICE_HLO_MODULE_CONFIG_H_

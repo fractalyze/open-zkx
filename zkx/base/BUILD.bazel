@@ -1,0 +1,87 @@
+# Copyright 2025 The ZKX Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
+load("//bazel:zkx.bzl", "if_android", "if_has_openmp_on_macos")
+load("//bazel:zkx_cc.bzl", "zkx_cc_library", "zkx_cc_unittest")
+
+package(default_visibility = ["//visibility:public"])
+
+zkx_cc_library(
+    name = "auto_reset",
+    hdrs = ["auto_reset.h"],
+    deps = ["@com_google_absl//absl/log:check"],
+)
+
+zkx_cc_library(
+    name = "bits",
+    hdrs = ["bits.h"],
+    deps = ["@com_google_absl//absl/numeric:bits"],
+)
+
+zkx_cc_library(
+    name = "logging",
+    srcs = ["logging.cc"],
+    hdrs = ["logging.h"],
+    deps = [
+        "//xla/tsl/platform",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/debugging:leak_check",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/log:vlog_is_on",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/synchronization",
+    ] + if_android(
+        [],
+        [
+            "@com_google_absl//absl/base",
+            "@com_google_absl//absl/strings:str_format",
+            "//xla/tsl/platform:env_time",
+        ],
+    ),
+)
+
+zkx_cc_library(
+    name = "openmp_util",
+    hdrs = ["openmp_util.h"],
+    deps = [
+        "//bazel:openmp_flags",
+    ] + if_has_openmp_on_macos(["@local_config_omp//:omp"]),
+)
+
+zkx_cc_library(
+    name = "random",
+    srcs = ["random.cc"],
+    hdrs = ["random.h"],
+    deps = [
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/random",
+    ],
+)
+
+zkx_cc_library(
+    name = "template_util",
+    hdrs = ["template_util.h"],
+)
+
+zkx_cc_library(
+    name = "type_list",
+    hdrs = ["type_list.h"],
+)
+
+zkx_cc_unittest(
+    name = "base_unittests",
+    srcs = ["auto_reset_unittest.cc"],
+    deps = [":auto_reset"],
+)

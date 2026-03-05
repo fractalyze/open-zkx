@@ -1,0 +1,192 @@
+# Copyright 2025 The ZKX Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
+load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library")
+load("//bazel:zkx_cc.bzl", "zkx_cc_binary", "zkx_cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+zkx_cc_library(
+    name = "attribute_exporter",
+    srcs = ["attribute_exporter.cc"],
+    hdrs = ["attribute_exporter.h"],
+    deps = [
+        "//zkx:zkx_data_cc_proto",
+        "//zkx/service:hlo_cc_proto",
+        "@com_google_absl//absl/status:statusor",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:Support",
+    ],
+)
+
+zkx_cc_library(
+    name = "layout_util",
+    srcs = ["layout_util.cc"],
+    hdrs = ["layout_util.h"],
+    deps = [
+        "//xla/tsl/platform:errors",
+        "//xla/tsl/platform:statusor",
+        "//zkx:shape_util",
+        "//zkx/hlo/builder:zkx_builder",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+    ],
+)
+
+zkx_cc_library(
+    name = "literal_exporter",
+    srcs = ["literal_exporter.cc"],
+    hdrs = ["literal_exporter.h"],
+    deps = [
+        ":type_to_shape",
+        "//zkx:array",
+        "//zkx:literal",
+        "//zkx:literal_util",
+        "//zkx:primitive_util",
+        "//zkx:shape_util",
+        "//zkx:types",
+        "//zkx:zkx_data_cc_proto",
+        "@com_google_absl//absl/log",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@llvm-project//llvm:Support",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:Support",
+    ],
+)
+
+zkx_cc_library(
+    name = "location_exporter",
+    srcs = ["location_exporter.cc"],
+    hdrs = ["location_exporter.h"],
+    deps = [
+        ":stack_frame_index_builder",
+        "//zkx:zkx_data_cc_proto",
+        "@llvm-project//llvm:Support",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:Support",
+    ],
+)
+
+zkx_cc_library(
+    name = "mlir_hlo_to_hlo",
+    srcs = [
+        "mlir_hlo_to_hlo.cc",
+        "operator_writers.inc",
+    ],
+    hdrs = ["mlir_hlo_to_hlo.h"],
+    deps = [
+        ":attribute_exporter",
+        ":layout_util",
+        ":literal_exporter",
+        ":location_exporter",
+        ":module_attributes_exporter",
+        ":operator_writer_inc",
+        ":stack_frame_index_builder",
+        ":type_to_shape",
+        "//xla/tsl/platform:errors",
+        "//xla/tsl/platform:statusor",
+        "//zkx:comparison_util",
+        "//zkx:debug_options_flags",
+        "//zkx:shape_util",
+        "//zkx:zkx_data_cc_proto",
+        "//zkx/hlo/builder:zkx_builder",
+        "//zkx/hlo/builder:zkx_computation",
+        "//zkx/hlo/ir:hlo",
+        "//zkx/mlir:mlir_utils",
+        "//zkx/mlir/utils:error_util",
+        "//zkx/mlir_hlo/mhlo/IR:mlir_hlo",
+        "//zkx/mlir_hlo/mhlo/transforms:passes",
+        "//zkx/service:hlo_module_config",
+        "//zkx/service/gpu:backend_configs_cc_proto",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+        "@com_google_protobuf//:protobuf_lite",
+        "@llvm-project//mlir:ArithDialect",
+        "@llvm-project//mlir:FuncDialect",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:Pass",
+        "@llvm-project//mlir:ShapeDialect",
+        "@llvm-project//mlir:Support",
+        "@llvm-project//mlir:TensorDialect",
+        "@llvm-project//mlir:TransformUtils",
+        "@stablehlo//stablehlo/dialect:base",
+    ],
+)
+
+zkx_cc_library(
+    name = "module_attributes_exporter",
+    srcs = ["module_attributes_exporter.cc"],
+    hdrs = ["module_attributes_exporter.h"],
+    deps = [
+        "//zkx:zkx_data_cc_proto",
+        "//zkx/service:hlo_cc_proto",
+        "//zkx/service:hlo_module_config",
+        "@com_google_absl//absl/status",
+        "@llvm-project//llvm:Support",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:Support",
+    ],
+)
+
+zkx_cc_binary(
+    name = "operator_writer_gen",
+    srcs = ["operator_writer_gen.cc"],
+    deps = [
+        "@com_google_absl//absl/debugging:leak_check",
+        "@llvm-project//llvm:Support",
+        "@llvm-project//llvm:TableGen",
+        "@llvm-project//mlir:TableGen",
+    ],
+)
+
+gentbl_cc_library(
+    name = "operator_writer_inc",
+    tbl_outs = [([], "operator_writers.inc")],
+    tblgen = ":operator_writer_gen",
+    td_file = "//zkx/mlir_hlo/mhlo/IR:hlo_ops.td",
+    deps = ["//zkx/mlir_hlo/mhlo/IR:hlo_ops_td_files"],
+)
+
+zkx_cc_library(
+    name = "stack_frame_index_builder",
+    srcs = ["stack_frame_index_builder.cc"],
+    hdrs = ["stack_frame_index_builder.h"],
+    deps = [
+        "//zkx/service:hlo_cc_proto",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:Support",
+    ],
+)
+
+zkx_cc_library(
+    name = "type_to_shape",
+    srcs = ["type_to_shape.cc"],
+    hdrs = ["type_to_shape.h"],
+    deps = [
+        "//zkx:shape_util",
+        "//zkx:zkx_data_cc_proto",
+        "//zkx/mlir:mlir_utils",
+        "//zkx/mlir_hlo/mhlo/IR:mlir_hlo",
+        "@llvm-project//llvm:Support",
+        "@llvm-project//mlir:IR",
+        "@llvm-project//mlir:SparseTensorDialect",
+        "@llvm-project//mlir:Support",
+    ],
+)
