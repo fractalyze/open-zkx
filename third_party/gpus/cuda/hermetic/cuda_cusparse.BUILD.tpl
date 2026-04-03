@@ -16,7 +16,7 @@
 
 licenses(["restricted"])  # NVIDIA proprietary license
 load(
-    "@zkx_gpu//xla/tsl/platform:cuda_build_defs.bzl",
+    "@open_zkx//xla/tsl/platform:cuda_build_defs.bzl",
     "cuda_rpath_flags",
 )
 
