@@ -22,6 +22,7 @@ limitations under the License.
 
 #include "zk_dtypes/include/big_int.h"
 #include "zk_dtypes/include/intn.h"
+#include "zk_dtypes/include/signed_big_int.h"
 
 namespace zkx {
 
@@ -46,11 +47,15 @@ using s4 = ::zk_dtypes::int4;
 
 using u128 = ::zk_dtypes::BigInt<2>;
 using u256 = ::zk_dtypes::BigInt<4>;
+using s128 = ::zk_dtypes::SignedBigInt<2>;
+using s256 = ::zk_dtypes::SignedBigInt<4>;
 
 template <class T>
 struct is_big_int : std::false_type {};
 template <size_t N>
 struct is_big_int<::zk_dtypes::BigInt<N>> : std::true_type {};
+template <size_t N>
+struct is_big_int<::zk_dtypes::SignedBigInt<N>> : std::true_type {};
 template <typename T>
 inline constexpr bool is_big_int_v = is_big_int<T>::value;
 

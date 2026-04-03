@@ -49,6 +49,8 @@ enum PrimitiveType {
   U64 = 15;
   U128 = 57;
   U256 = 58;
+  S128 = 59;
+  S256 = 60;
 
   // A tuple is a polymorphic sequence; e.g. a shape that holds different
   // sub-shapes. They are used for things like returning multiple values from a
@@ -562,6 +564,8 @@ message LiteralProto {
   bytes binary_field_t7s = 56;
   bytes u128s = 57;
   bytes u256s = 58;
+  bytes s128s = 59;
+  bytes s256s = 60;
 }
 
 message WindowDimension {
