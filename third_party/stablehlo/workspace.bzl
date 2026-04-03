@@ -21,16 +21,16 @@ def repo():
     if native.existing_rule("stablehlo"):
         return
 
-    # STABLEHLO_COMMIT = "7b9d1021a0b3309d120ea2cb7cab50c6a95d068c"
-    # STABLEHLO_SHA256 = "63b9e7f3012ff7b724f2e399715dfdc23e894b483c4aa0ccf3eb3f61466ec0dc"
-    # http_archive(
-    #     name = "stablehlo",
-    #     sha256 = STABLEHLO_SHA256,
-    #     strip_prefix = "stablehlo-{commit}".format(commit = STABLEHLO_COMMIT),
-    #     urls = ["https://github.com/fractalyze/stablehlo/archive/{commit}/stablehlo-{commit}.tar.gz".format(commit = STABLEHLO_COMMIT)],
-    # )
-    # Uncomment this for development!
-    native.local_repository(
+    STABLEHLO_COMMIT = "905bea8f419683aea10c226bb4aac62b685321c1"
+    STABLEHLO_SHA256 = "320fa17f5b9e52efa8988c330efb2e3cd0734184e463ec7a47863a68719812b0"
+    http_archive(
         name = "stablehlo",
-        path = "../stablehlo",
+        sha256 = STABLEHLO_SHA256,
+        strip_prefix = "stablehlo-{commit}".format(commit = STABLEHLO_COMMIT),
+        urls = ["https://github.com/fractalyze/stablehlo/archive/{commit}/stablehlo-{commit}.tar.gz".format(commit = STABLEHLO_COMMIT)],
     )
+    # Uncomment this for local development:
+    # native.local_repository(
+    #     name = "stablehlo",
+    #     path = "../stablehlo",
+    # )
