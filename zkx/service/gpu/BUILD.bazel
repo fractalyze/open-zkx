@@ -550,6 +550,7 @@ zkx_cc_library(
         "//zkx/hlo/pass:hlo_pass_pipeline",
         "//zkx/hlo/transforms/simplifiers:hlo_dce",
         "//zkx/service:copy_insertion",
+        "//zkx/service/gpu/transforms:fusion_wrapper",
         "//zkx/stream_executor:device_description",
     ],
 )

@@ -18,6 +18,7 @@ limitations under the License.
 
 #include "zkx/hlo/transforms/simplifiers/hlo_dce.h"
 #include "zkx/service/copy_insertion.h"
+#include "zkx/service/gpu/transforms/fusion_wrapper.h"
 
 namespace zkx::gpu {
 namespace {}  // namespace
@@ -34,6 +35,11 @@ HloPassPipeline PrepareHloModuleForIrEmittingPipeline(
   // (b/27180329). Therefore, in that case, we set the output to be a copy of
   // the parameter.
   HloPassPipeline pipeline("GPU-ir-emit-prepare");
+
+  // Wrap standalone element-wise ops (add, multiply, divide, etc.) in
+  // kLoop fusions. Without this, these ops reach ir_emitter_unnested
+  // directly and fail with "Unsupported instruction opcode".
+  pipeline.AddPass<FusionWrapper>(device_description);
 
   pipeline.AddPass<HloDCE>();
 
