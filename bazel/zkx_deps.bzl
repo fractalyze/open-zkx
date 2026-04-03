@@ -77,13 +77,13 @@ def zkx_deps():
         strip_prefix = "abseil-cpp-20250814.0",
         urls = tf_mirror_urls("https://github.com/abseil/abseil-cpp/archive/refs/tags/20250814.0.tar.gz"),
         patch_file = [
-            "//third_party/absl:btree.patch",
-            "//third_party/absl:build_dll.patch",
-            "//third_party/absl:check_op.patch",
-            "//third_party/absl:check_op_2.patch",
-            "//third_party/absl:endian.patch",
-            "//third_party/absl:if_constexpr.patch",
-            "//third_party/absl:rules_cc.patch",
+            str(Label("//third_party/absl:btree.patch")),
+            str(Label("//third_party/absl:build_dll.patch")),
+            str(Label("//third_party/absl:check_op.patch")),
+            str(Label("//third_party/absl:check_op_2.patch")),
+            str(Label("//third_party/absl:endian.patch")),
+            str(Label("//third_party/absl:if_constexpr.patch")),
+            str(Label("//third_party/absl:rules_cc.patch")),
         ],
         repo_mapping = {
             "@googletest": "@com_google_googletest",
@@ -120,7 +120,7 @@ def zkx_deps():
         # $ git diff > <client-root>/third_party/googletest/googletest.patch
         #
         # The patch path is relative to the workspace root.
-        patch_file = ["//third_party/googletest:googletest.patch"],
+        patch_file = [str(Label("//third_party/googletest:googletest.patch"))],
         urls = tf_mirror_urls("https://github.com/google/googletest/archive/28e9d1f26771c6517c3b4be10254887673c94018.zip"),
     )
 
@@ -128,23 +128,23 @@ def zkx_deps():
         name = "com_github_grpc_grpc",
         sha256 = "dd6a2fa311ba8441bbefd2764c55b99136ff10f7ea42954be96006a2723d33fc",
         strip_prefix = "grpc-1.74.0",
-        patch_file = ["//third_party/grpc:grpc.patch"],
+        patch_file = [str(Label("//third_party/grpc:grpc.patch"))],
         urls = tf_mirror_urls("https://github.com/grpc/grpc/archive/refs/tags/v1.74.0.tar.gz"),
     )
 
     # Needed by com_google_protobuf
     tf_http_archive(
         name = "zlib",
-        build_file = "//third_party:zlib.BUILD",
+        build_file = str(Label("//third_party:zlib.BUILD")),
         sha256 = "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23",
         strip_prefix = "zlib-1.3.1",
-        system_build_file = "//third_party/systemlibs:zlib.BUILD",
+        system_build_file = str(Label("//third_party/systemlibs:zlib.BUILD")),
         urls = tf_mirror_urls("https://zlib.net/zlib-1.3.1.tar.gz"),
     )
 
     tf_http_archive(
         name = "com_github_tencent_rapidjson",
-        build_file = "//third_party:rapidjson/rapidjson.BUILD",
+        build_file = str(Label("//third_party:rapidjson/rapidjson.BUILD")),
         sha256 = "c97766f7b8a3129e49fcd36d041a790d063a62f7e06b600759541d08dc0156d5",
         strip_prefix = "rapidjson-862c39be371278a45a88d4d1d75164be57bb7e2d",
         urls = tf_mirror_urls("https://github.com/Tencent/rapidjson/archive/862c39be371278a45a88d4d1d75164be57bb7e2d.zip"),
@@ -155,7 +155,7 @@ def zkx_deps():
         urls = tf_mirror_urls("https://github.com/pybind/pybind11/archive/v2.13.6.tar.gz"),
         sha256 = "e08cb87f4773da97fa7b5f035de8763abc656d87d5773e62f6da0587d1f0ec20",
         strip_prefix = "pybind11-2.13.6",
-        build_file = "//third_party:pybind11.BUILD",
+        build_file = str(Label("//third_party:pybind11.BUILD")),
     )
 
     jsoncpp()

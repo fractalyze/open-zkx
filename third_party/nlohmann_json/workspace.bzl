@@ -24,5 +24,5 @@ def repo():
         name = "nlohmann_json",
         sha256 = "a22461d13119ac5c78f205d3df1db13403e58ce1bb1794edc9313677313f4a9d",
         url = "https://github.com/nlohmann/json/releases/download/v3.11.3/include.zip",
-        build_file = "//third_party/nlohmann_json:nlohmann_json.BUILD",
+        build_file = Label("//third_party/nlohmann_json:nlohmann_json.BUILD"),
     )

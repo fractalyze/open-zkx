@@ -29,5 +29,5 @@ def repo():
         sha256 = UV_SHA256,
         strip_prefix = "libuv-{version}".format(version = UV_VERSION),
         urls = tf_mirror_urls("https://dist.libuv.org/dist/{version}/libuv-{version}.tar.gz".format(version = UV_VERSION)),
-        build_file = "//third_party/uv:uv.BUILD",
+        build_file = str(Label("//third_party/uv:uv.BUILD")),
     )

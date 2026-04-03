@@ -29,7 +29,7 @@ def repo():
 
     tf_http_archive(
         name = "farmhash_archive",
-        build_file = "//third_party/farmhash:farmhash.BUILD",
+        build_file = str(Label("//third_party/farmhash:farmhash.BUILD")),
         sha256 = FARMHASH_SHA256,
         strip_prefix = "farmhash-{commit}".format(commit = FARMHASH_COMMIT),
         urls = tf_mirror_urls("https://github.com/google/farmhash/archive/{commit}.tar.gz".format(commit = FARMHASH_COMMIT)),
@@ -37,8 +37,8 @@ def repo():
 
     tf_http_archive(
         name = "farmhash_gpu_archive",
-        build_file = "//third_party/farmhash:farmhash_gpu.BUILD",
-        patch_file = ["//third_party/farmhash:farmhash_support_cuda.patch"],
+        build_file = str(Label("//third_party/farmhash:farmhash_gpu.BUILD")),
+        patch_file = [str(Label("//third_party/farmhash:farmhash_support_cuda.patch"))],
         sha256 = FARMHASH_SHA256,
         strip_prefix = "farmhash-{commit}".format(commit = FARMHASH_COMMIT),
         urls = tf_mirror_urls("https://github.com/google/farmhash/archive/{commit}.tar.gz".format(commit = FARMHASH_COMMIT)),
