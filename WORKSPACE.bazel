@@ -15,7 +15,17 @@
 
 workspace(name = "open_zkx")
 
-load("//third_party/py/zk_dtypes:workspace.bzl", zk_dtypes = "repo")
+# Dependency chain: stablehlo → prime_ir → zk_dtypes (transitive).
+# Matches zkx(closed) structure — only stablehlo is a direct dependency.
+load("//third_party/stablehlo:workspace.bzl", stablehlo = "repo")
+
+stablehlo()
+
+load("@stablehlo//third_party/prime_ir:workspace.bzl", prime_ir = "repo")
+
+prime_ir()
+
+load("@prime_ir//third_party/zk_dtypes:workspace.bzl", zk_dtypes = "repo")
 
 zk_dtypes()
 
