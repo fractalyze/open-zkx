@@ -50,6 +50,7 @@ RUNNER_RUNTIME_DEPS = [
 zkx_cc_binary(
     name = "stablehlo_runner_main",
     srcs = ["stablehlo_runner_main.cc"],
+    force_exceptions = True,
     deps = [
         ":stablehlo_utils",
         "//xla/tsl/platform:env",
