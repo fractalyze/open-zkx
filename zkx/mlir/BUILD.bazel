@@ -13,7 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 
-load("//bazel:zkx_cc.bzl", "zkx_cc_library")
+load("//bazel:zkx_cc.bzl", "zkx_cc_library", "zkx_cc_test")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -28,6 +28,17 @@ zkx_cc_library(
         "@llvm-project//mlir:SCFDialect",
         "@llvm-project//mlir:Support",
         "@prime_ir//prime_ir/Dialect/EllipticCurve/IR:EllipticCurve",
+        "@prime_ir//prime_ir/Dialect/Field/IR:Field",
+    ],
+)
+
+zkx_cc_test(
+    name = "codegen_utils_unittest",
+    srcs = ["codegen_utils_unittest.cc"],
+    deps = [
+        ":codegen_utils",
+        "@llvm-project//mlir:ArithDialect",
+        "@llvm-project//mlir:IR",
         "@prime_ir//prime_ir/Dialect/Field/IR:Field",
     ],
 )
