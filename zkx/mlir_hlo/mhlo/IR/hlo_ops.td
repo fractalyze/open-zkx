@@ -479,20 +479,43 @@ def MHLO_MulOp : MHLO_BinaryElementwiseOp<"multiply",
 
 }
 
-def MHLO_PowOp : MHLO_BinaryElementwiseOp<"power",
-      [Pure, HLO_CompatibleOperandsAndResultType], MHLO_IntOrFieldTensor> {
+def MHLO_PowOp : MHLO_Op<"power",
+    [Pure, SameOperandsAndResultShape, Elementwise]> {
   let summary = "Pow operation";
   let description = [{
     Performs element-wise exponentiation of `lhs` tensor by `rhs` tensor and
     produces a `result` tensor.
+
+    The base (`lhs`) and result must have the same type (integer or field).
+    The exponent (`rhs`) must be an integer type. Mirrors `stablehlo.power`'s
+    field-base / integer-exponent shape so the legalization from StableHLO is
+    a 1:1 op-name swap; the downstream `field.powui` lowering already expects
+    a signless-integer exponent. Element types of base and exponent can
+    differ, so `HLO_CompatibleOperandsAndResultType` cannot be used; only the
+    shape constraint applies. Result type is always supplied at construction
+    site (no shape-inference interfaces).
 
     See:
     https://github.com/openxla/stablehlo/blob/main/docs/spec.md#power
 
     Example:
     ```mlir
-    %result = mhlo.power %lhs, %rhs : tensor<6xi32>
+    %result = mhlo.power %lhs, %rhs
+        : (tensor<6xi64>, tensor<6xi64>) -> tensor<6xi64>
+
+    %result = mhlo.power %base, %exp
+        : (tensor<!pf>, tensor<i32>) -> tensor<!pf>
     ```
+  }];
+
+  let arguments = (ins
+    MHLO_IntOrFieldTensor:$lhs,
+    MHLO_IntTensor:$rhs
+  );
+  let results = (outs MHLO_IntOrFieldTensor:$result);
+
+  let assemblyFormat = [{
+    operands attr-dict `:` functional-type(operands, results)
   }];
 }
 
