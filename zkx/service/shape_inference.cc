@@ -1128,8 +1128,26 @@ absl::StatusOr<Shape> ShapeInference::InferBinaryOpShape(
       return InferElementwiseBinaryOpShape(opcode, lhs, rhs,
                                            broadcast_dimensions);
 
-    case HloOpcode::kSubtract:
     case HloOpcode::kPower:
+      // Field-base / int-exponent is allowed; see MHLO_PowOp in hlo_ops.td.
+      if (ABSL_PREDICT_FALSE(ShapeUtil::ElementIsField(lhs))) {
+        if (!primitive_util::IsIntegralType(rhs.element_type())) {
+          return absl::InvalidArgumentError(absl::StrFormat(
+              "Power op with field-typed base requires integer exponent; "
+              "got rhs=%s",
+              ShapeUtil::HumanString(rhs)));
+        }
+        if (!ShapeUtil::CompatibleIgnoringElementType(lhs, rhs)) {
+          return absl::InvalidArgumentError(
+              absl::StrFormat("Power op shape mismatch (ignoring element "
+                              "type): lhs=%s rhs=%s",
+                              ShapeUtil::HumanString(lhs),
+                              ShapeUtil::HumanString(rhs)));
+        }
+        return lhs;
+      }
+      [[fallthrough]];
+    case HloOpcode::kSubtract:
     case HloOpcode::kDivide:
     case HloOpcode::kRemainder:
     case HloOpcode::kShiftLeft:

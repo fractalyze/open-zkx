@@ -22,6 +22,7 @@ zkx_cc_binary(
     linkopts = ["-Wl,-rpath,$$ORIGIN/../lit_lib"],
     visibility = [
         "//zkx/codegen/emitters/transforms/tests:__subpackages__",
+        "//zkx/mlir_hlo/mhlo/IR/tests:__subpackages__",
     ],
     deps = [
         "//zkx/backends/gpu/codegen/emitters/ir:zkx_gpu",
