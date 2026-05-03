@@ -1130,21 +1130,16 @@ absl::StatusOr<Shape> ShapeInference::InferBinaryOpShape(
 
     case HloOpcode::kPower:
       // Field-base / int-exponent is allowed; see MHLO_PowOp in hlo_ops.td.
-      if (ABSL_PREDICT_FALSE(ShapeUtil::ElementIsField(lhs))) {
-        if (!primitive_util::IsIntegralType(rhs.element_type())) {
-          return absl::InvalidArgumentError(absl::StrFormat(
-              "Power op with field-typed base requires integer exponent; "
-              "got rhs=%s",
-              ShapeUtil::HumanString(rhs)));
-        }
-        if (!ShapeUtil::CompatibleIgnoringElementType(lhs, rhs)) {
-          return absl::InvalidArgumentError(
-              absl::StrFormat("Power op shape mismatch (ignoring element "
-                              "type): lhs=%s rhs=%s",
-                              ShapeUtil::HumanString(lhs),
-                              ShapeUtil::HumanString(rhs)));
-        }
-        return lhs;
+      // Route through InferElementwiseBinaryOpShape with rhs reinterpreted as
+      // lhs's element type so its broadcasting and dynamic-shape refinement
+      // logic still applies (e.g. field<?> ** i32<10> -> field<10>, or scalar
+      // exponent broadcast against a field tensor base).
+      if (ShapeUtil::ElementIsField(lhs) &&
+          primitive_util::IsIntegralType(rhs.element_type())) {
+        Shape rhs_as_lhs =
+            ShapeUtil::ChangeElementType(rhs, lhs.element_type());
+        return InferElementwiseBinaryOpShape(opcode, lhs, rhs_as_lhs,
+                                             broadcast_dimensions);
       }
       [[fallthrough]];
     case HloOpcode::kSubtract:
