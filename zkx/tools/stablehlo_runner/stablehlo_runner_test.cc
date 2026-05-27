@@ -19,6 +19,8 @@ limitations under the License.
 #include <string>
 #include <vector>
 
+#include "absl/status/status.h"
+#include "absl/strings/match.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/str_cat.h"
 #include "gtest/gtest.h"
@@ -224,6 +226,27 @@ TEST_F(StablehloRunnerTest, BroadcastFusion) {
 
   // Deterministic fingerprint of result tensor.
   EXPECT_FALSE(fp.empty());
+}
+
+// Regression for mixed-type while-body fusion: the body mixes BabyBear field
+// values with i32 bitwise ops and a standalone i32 add for the loop counter.
+// Historically this shape could reach IrEmitterUnnested with an unfused add and
+// fail with "Unsupported instruction opcode: add". This test only checks that
+// we no longer fail for that reason; machine-local PTX/libdevice toolchain
+// issues are outside the scope of the regression.
+TEST_F(StablehloRunnerTest, MixedTypeWhileBodyFusion) {
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto hlo_module,
+      LoadModule("fusion_showcase", "mixed_while_bitwise.stablehlo.mlir"));
+
+  auto executable_or =
+      runner_->CreateExecutable(std::move(hlo_module), /*run_hlo_passes=*/true);
+
+  if (!executable_or.ok()) {
+    EXPECT_FALSE(absl::StrContains(executable_or.status().message(),
+                                   "Unsupported instruction opcode"))
+        << executable_or.status();
+  }
 }
 
 }  // namespace
