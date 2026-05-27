@@ -239,7 +239,7 @@ TEST_F(StablehloRunnerTest, MixedTypeWhileBodyFusion) {
       auto hlo_module,
       LoadModule("fusion_showcase", "mixed_while_bitwise.stablehlo.mlir"));
 
-  absl::StatusOr<std::unique_ptr<OpaqueExecutable>> executable_or =
+  auto executable_or =
       runner_->CreateExecutable(std::move(hlo_module), /*run_hlo_passes=*/true);
 
   if (!executable_or.ok()) {
